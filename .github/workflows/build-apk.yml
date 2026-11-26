@@ -17,6 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Check signing secrets
         env:
           KS_B64: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
@@ -38,27 +43,26 @@ jobs:
           print("decoded", len(data), "bytes")
           PY
           export BIRCH_KEYSTORE_PASSWORD="${KS_PASS:-birchos}"
-          export BIRCH_KEY_ALIAS="${KEY_ALIAS:-birch}"
-          export BIRCH_KEY_PASSWORD="${KEY_PASS:-$BIRCH_KEYSTORE_PASSWORD}"
           keytool -list -keystore "$RUNNER_TEMP/birch.jks" -storepass "$BIRCH_KEYSTORE_PASSWORD"
           echo "Keystore OK"
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - uses: android-actions/setup-android@v3
-
-      - name: Android SDK 34
+      - name: Install Android SDK
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          set -e
+          ANDROID_HOME=$HOME/android-sdk
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -qo /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          if [ -d "$ANDROID_HOME/cmdline-tools/cmdline-tools" ]; then
+            mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Build and sign
         env:
-          BT: ${{ env.ANDROID_SDK_ROOT }}/build-tools/34.0.0
-          PF: ${{ env.ANDROID_SDK_ROOT }}/platforms/android-34
           BIRCH_KEYSTORE_PASSWORD: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
           BIRCH_KEY_ALIAS: ${{ secrets.BIRCH_KEY_ALIAS }}
           BIRCH_KEY_PASSWORD: ${{ secrets.BIRCH_KEY_PASSWORD }}
@@ -66,6 +70,9 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
         run: |
           set -euo pipefail
+          export ANDROID_HOME=$HOME/android-sdk
+          export BT="$ANDROID_HOME/build-tools/34.0.0"
+          export PF="$ANDROID_HOME/platforms/android-34"
           export VERSION_CODE=$((59 + VERSION_CODE))
           echo "$VERSION_CODE" > /tmp/version_code.txt
           echo "Building versionCode=$VERSION_CODE"
@@ -78,6 +85,7 @@ jobs:
           pathlib.Path(os.environ["RUNNER_TEMP"], "birch.jks").write_bytes(base64.b64decode(raw))
           PY
           export KS="$RUNNER_TEMP/birch.jks"
+          sed -i 's/javac -source 8 -target 8 -nowarn/javac -encoding UTF-8 -source 8 -target 8 -nowarn/' launcher/native-android/build.sh || true
           bash launcher/native-android/build.sh
           ls -la /tmp/birch-build/birchos-launcher.apk
           rm -f "$RUNNER_TEMP/birch.jks"
