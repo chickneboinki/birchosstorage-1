@@ -16,6 +16,7 @@ import android.util.Base64;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -37,7 +38,7 @@ import org.json.JSONObject;
 
 /** Birch OS home launcher: hosts the web UI and exposes installed apps through window.BirchAndroid. */
 public class MainActivity extends Activity {
-  static final int VERSION = 58;
+  static final int VERSION = 66;
   static final String HOST = "birchos.local";
   static final String URL = "https://" + HOST + "/index.html";
   WebView web;
@@ -45,12 +46,18 @@ public class MainActivity extends Activity {
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
     web = new WebView(this);
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(true);
+    s.setDatabaseEnabled(true);
     s.setMediaPlaybackRequiresUserGesture(false);
+    s.setCacheMode(WebSettings.LOAD_DEFAULT);
+    s.setOffscreenPreRaster(true);
+    web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    CookieManager.getInstance().setAcceptCookie(true);
+    CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
     web.setBackgroundColor(0xFF000000);
     web.setWebViewClient(new WebViewClient() {
       @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest req) {
@@ -65,6 +72,11 @@ public class MainActivity extends Activity {
     web.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     setContentView(web);
     web.loadUrl(URL);
+  }
+
+  @Override protected void onPause() {
+    try { CookieManager.getInstance().flush(); } catch (Throwable ignored) {}
+    super.onPause();
   }
 
   @Override public void onBackPressed() {
@@ -156,7 +168,7 @@ public class MainActivity extends Activity {
         return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
       } catch (Throwable t) {
         try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", currentVersion()).toString(); }
-        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":58}"; }
+        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":66}"; }
       } finally { if (c != null) c.disconnect(); }
     }
 

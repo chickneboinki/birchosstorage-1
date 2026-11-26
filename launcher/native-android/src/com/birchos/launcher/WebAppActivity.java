@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.view.Choreographer;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -28,7 +30,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
 
-/** Full-screen WebView for built-in and remote apps (Movies, etc.). */
+/** Full-screen WebView for Movies and other web apps. Smooth cursor + persistent login. */
 public class WebAppActivity extends Activity {
   static final String CHALLENGE =
       "(function(){try{if(window.__birchChal)return;window.__birchChal=1;"
@@ -36,7 +38,7 @@ public class WebAppActivity extends Activity {
           + "var tx=(el.innerText||'').toLowerCase();"
           + "if(/qr|scan|captcha|cloudflare|just a moment|verify you|are you human/.test(tx)"
           + "&&el.getBoundingClientRect().height>80){el.style.display='none';try{el.remove()}catch(e){}}});}"
-          + "kill();setInterval(kill,900);}catch(e){}})();";
+          + "kill();setInterval(kill,1200);}catch(e){}})();";
   static final String NO_POPUPS =
       "(function(){try{window.open=function(){return null};"
           + "document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');"
@@ -50,6 +52,10 @@ public class WebAppActivity extends Activity {
   String homeBase = "";
   WebChromeClient.CustomViewCallback fullCb;
   int savedY;
+  boolean hl, hr, hu, hd;
+  float vx, vy;
+  long lastFrame;
+  boolean looping;
 
   void hideBars(View v) {
     v.setSystemUiVisibility(
@@ -67,6 +73,14 @@ public class WebAppActivity extends Activity {
     return p.length <= 2 ? host : p[p.length - 2] + "." + p[p.length - 1];
   }
 
+  void persistCookies() {
+    try {
+      CookieManager cm = CookieManager.getInstance();
+      cm.setAcceptCookie(true);
+      cm.flush();
+    } catch (Throwable ignored) {}
+  }
+
   @Override
   protected void onCreate(Bundle b) {
     super.onCreate(b);
@@ -76,7 +90,9 @@ public class WebAppActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     root = new FrameLayout(this);
     root.setBackgroundColor(0xFF000000);
+
     web = new WebView(this);
+    web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(true);
@@ -91,7 +107,12 @@ public class WebAppActivity extends Activity {
     s.setCacheMode(WebSettings.LOAD_DEFAULT);
     s.setUserAgentString(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
-    CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+
+    CookieManager cm = CookieManager.getInstance();
+    cm.setAcceptCookie(true);
+    cm.setAcceptThirdPartyCookies(web, true);
+    persistCookies();
+
     web.setBackgroundColor(0xFF000000);
     web.addJavascriptInterface(new WatchBridge(), "BirchWatch");
     web.setWebViewClient(
@@ -129,6 +150,7 @@ public class WebAppActivity extends Activity {
             v.evaluateJavascript(NO_POPUPS, null);
             v.evaluateJavascript(CHALLENGE, null);
             if (Pic.js != null) v.evaluateJavascript(Pic.js, null);
+            persistCookies();
           }
 
           @Override
@@ -195,24 +217,28 @@ public class WebAppActivity extends Activity {
     web.setDownloadListener(
         (url, ua, cd, mime, len) -> {
           String name = URLUtil.guessFileName(url, cd, mime).toLowerCase();
-          if (name.endsWith(".apk")
-              || "application/vnd.android.package-archive".equals(mime)) installApk(url, ua);
+          if (name.endsWith(".apk") || "application/vnd.android.package-archive".equals(mime))
+            installApk(url, ua);
           else Toast.makeText(this, "Birch OS can only install .apk files", Toast.LENGTH_LONG).show();
         });
+
     cursor = new View(this);
     GradientDrawable g = new GradientDrawable();
     g.setShape(GradientDrawable.OVAL);
     g.setColor(0xEEFFFFFF);
-    g.setStroke(4, 0xFF000000);
+    g.setStroke(3, 0xFF000000);
     cursor.setBackground(g);
     cursor.setVisibility(View.GONE);
-    root.addView(cursor, new FrameLayout.LayoutParams(34, 34));
+    cursor.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    root.addView(cursor, new FrameLayout.LayoutParams(28, 28));
+
     fsLayer = new FrameLayout(this);
     fsLayer.setBackgroundColor(0xFF000000);
     fsLayer.setVisibility(View.GONE);
     root.addView(fsLayer, new FrameLayout.LayoutParams(-1, -1));
     setContentView(root);
     hideBars(root);
+
     String url = getIntent().getStringExtra("url");
     if (url != null) {
       try {
@@ -223,6 +249,19 @@ public class WebAppActivity extends Activity {
     }
     web.loadUrl(url == null ? "about:blank" : url);
     showChooser();
+  }
+
+  @Override
+  protected void onPause() {
+    persistCookies();
+    stopLoop();
+    super.onPause();
+  }
+
+  @Override
+  protected void onResume() {
+    super.onResume();
+    persistCookies();
   }
 
   @Override
@@ -259,7 +298,7 @@ public class WebAppActivity extends Activity {
         box,
         new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
-    cur.requestFocus();
+    sel.requestFocus();
   }
 
   Button btn(String label) {
@@ -304,57 +343,93 @@ public class WebAppActivity extends Activity {
   }
 
   void placeCursor() {
-    cursor.setTranslationX(cx - 17);
-    cursor.setTranslationY(cy - 17);
+    cursor.setTranslationX(cx - 14);
+    cursor.setTranslationY(cy - 14);
   }
+
+  void startLoop() {
+    if (looping) return;
+    looping = true;
+    lastFrame = 0;
+    Choreographer.getInstance().postFrameCallback(frame);
+  }
+
+  void stopLoop() {
+    looping = false;
+    hl = hr = hu = hd = false;
+    vx = vy = 0;
+  }
+
+  final Choreographer.FrameCallback frame =
+      new Choreographer.FrameCallback() {
+        @Override
+        public void doFrame(long t) {
+          if (!looping || !cursorMode) {
+            looping = false;
+            return;
+          }
+          float dt = lastFrame == 0 ? 0.016f : Math.min(0.033f, (t - lastFrame) / 1_000_000_000f);
+          lastFrame = t;
+          float targetX = (hr ? 1 : 0) + (hl ? -1 : 0);
+          float targetY = (hd ? 1 : 0) + (hu ? -1 : 0);
+          vx += (targetX * 900f - vx) * Math.min(1f, dt * 10f);
+          vy += (targetY * 900f - vy) * Math.min(1f, dt * 10f);
+          if (Math.abs(vx) < 1 && targetX == 0) vx = 0;
+          if (Math.abs(vy) < 1 && targetY == 0) vy = 0;
+          if (vx != 0 || vy != 0) {
+            int w = Math.max(1, root.getWidth());
+            int h = Math.max(1, root.getHeight());
+            cx = Math.max(0, Math.min(w, cx + vx * dt));
+            cy = Math.max(0, Math.min(h, cy + vy * dt));
+            placeCursor();
+          }
+          if (hl || hr || hu || hd || Math.abs(vx) > 0.5f || Math.abs(vy) > 0.5f)
+            Choreographer.getInstance().postFrameCallback(this);
+          else {
+            looping = false;
+            lastFrame = 0;
+          }
+        }
+      };
 
   @Override
   public boolean dispatchKeyEvent(KeyEvent e) {
     if (chooser != null) return super.dispatchKeyEvent(e);
-    if (cursorMode && e.getAction() == KeyEvent.ACTION_DOWN) {
-      int code = e.getKeyCode();
-      float step = e.isAltPressed() || e.isShiftPressed() ? 12 : 36;
+    int code = e.getKeyCode();
+    int action = e.getAction();
+
+    if (cursorMode) {
+      boolean down = action == KeyEvent.ACTION_DOWN;
+      boolean up = action == KeyEvent.ACTION_UP;
       if (code == KeyEvent.KEYCODE_DPAD_LEFT) {
-        cx = Math.max(0, cx - step);
-        placeCursor();
+        if (down) { hl = true; startLoop(); }
+        if (up) hl = false;
         return true;
       }
       if (code == KeyEvent.KEYCODE_DPAD_RIGHT) {
-        cx = Math.min(root.getWidth(), cx + step);
-        placeCursor();
+        if (down) { hr = true; startLoop(); }
+        if (up) hr = false;
         return true;
       }
       if (code == KeyEvent.KEYCODE_DPAD_UP) {
-        cy = Math.max(0, cy - step);
-        placeCursor();
+        if (down) { hu = true; startLoop(); }
+        if (up) hu = false;
         return true;
       }
       if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
-        cy = Math.min(root.getHeight(), cy + step);
-        placeCursor();
+        if (down) { hd = true; startLoop(); }
+        if (up) hd = false;
         return true;
       }
-      if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) {
-        web.dispatchTouchEvent(
-            MotionEvent.obtain(
-                android.os.SystemClock.uptimeMillis(),
-                android.os.SystemClock.uptimeMillis(),
-                MotionEvent.ACTION_DOWN,
-                cx,
-                cy,
-                0));
-        web.dispatchTouchEvent(
-            MotionEvent.obtain(
-                android.os.SystemClock.uptimeMillis(),
-                android.os.SystemClock.uptimeMillis(),
-                MotionEvent.ACTION_UP,
-                cx,
-                cy,
-                0));
+      if (down && (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER)) {
+        long now = SystemClock.uptimeMillis();
+        web.dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, cx, cy, 0));
+        web.dispatchTouchEvent(MotionEvent.obtain(now, now + 16, MotionEvent.ACTION_UP, cx, cy, 0));
         return true;
       }
     }
-    if (e.getKeyCode() == KeyEvent.KEYCODE_BACK && e.getAction() == KeyEvent.ACTION_UP) {
+
+    if (code == KeyEvent.KEYCODE_BACK && action == KeyEvent.ACTION_UP) {
       if (fullView != null && fullCb != null) {
         fullCb.onCustomViewHidden();
         return true;
