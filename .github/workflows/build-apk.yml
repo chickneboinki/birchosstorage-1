@@ -26,22 +26,21 @@ jobs:
         run: |
           set -e
           echo "BIRCH_KEYSTORE_BASE64 length: ${#KS_B64}"
-          echo "BIRCH_KEYSTORE_PASSWORD set: $([ -n \"$KS_PASS\" ] && echo yes || echo no)"
-          echo "BIRCH_KEY_ALIAS set: $([ -n \"$KEY_ALIAS\" ] && echo yes || echo no)"
-          echo "BIRCH_KEY_PASSWORD set: $([ -n \"$KEY_PASS\" ] && echo yes || echo no)"
           if [ -z "$KS_B64" ]; then
-            echo "::error::Missing secret BIRCH_KEYSTORE_BASE64. Paste the full base64 of birch-release.jks (one line)."
+            echo "::error::Missing secret BIRCH_KEYSTORE_BASE64"
             exit 1
           fi
-          printf '%s' "$KS_B64" | tr -d '\\n\\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
-          ls -la "$RUNNER_TEMP/birch.jks"
+          python3 - <<'PY'
+          import os, base64, pathlib
+          raw = os.environ["KS_B64"].strip().replace("\n","").replace("\r","").replace(" ","")
+          data = base64.b64decode(raw)
+          pathlib.Path(os.environ["RUNNER_TEMP"], "birch.jks").write_bytes(data)
+          print("decoded", len(data), "bytes")
+          PY
           export BIRCH_KEYSTORE_PASSWORD="${KS_PASS:-birchos}"
           export BIRCH_KEY_ALIAS="${KEY_ALIAS:-birch}"
           export BIRCH_KEY_PASSWORD="${KEY_PASS:-$BIRCH_KEYSTORE_PASSWORD}"
-          keytool -list -keystore "$RUNNER_TEMP/birch.jks" -storepass "$BIRCH_KEYSTORE_PASSWORD" || {
-            echo "::error::Keystore open failed. Check BIRCH_KEYSTORE_BASE64 and BIRCH_KEYSTORE_PASSWORD (default birchos)."
-            exit 1
-          }
+          keytool -list -keystore "$RUNNER_TEMP/birch.jks" -storepass "$BIRCH_KEYSTORE_PASSWORD"
           echo "Keystore OK"
 
       - uses: actions/setup-java@v4
@@ -67,14 +66,17 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          # Sideloaded builds went to 59; keep Actions releases always newer
           export VERSION_CODE=$((59 + VERSION_CODE))
           echo "$VERSION_CODE" > /tmp/version_code.txt
           echo "Building versionCode=$VERSION_CODE"
           export BIRCH_KEYSTORE_PASSWORD="${BIRCH_KEYSTORE_PASSWORD:-birchos}"
           export BIRCH_KEY_ALIAS="${BIRCH_KEY_ALIAS:-birch}"
           export BIRCH_KEY_PASSWORD="${BIRCH_KEY_PASSWORD:-$BIRCH_KEYSTORE_PASSWORD}"
-          printf '%s' "$KS_B64" | tr -d '\\n\\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
+          python3 - <<'PY'
+          import os, base64, pathlib
+          raw = os.environ["KS_B64"].strip().replace("\n","").replace("\r","").replace(" ","")
+          pathlib.Path(os.environ["RUNNER_TEMP"], "birch.jks").write_bytes(base64.b64decode(raw))
+          PY
           export KS="$RUNNER_TEMP/birch.jks"
           bash launcher/native-android/build.sh
           ls -la /tmp/birch-build/birchos-launcher.apk
@@ -83,7 +85,7 @@ jobs:
       - name: version.json
         run: |
           code=$(cat /tmp/version_code.txt)
-          printf '{\"versionCode\":%s,\"versionName\":\"%s\"}\\n' "$code" "$code" > version.json
+          printf '{"versionCode":%s,"versionName":"%s"}\n' "$code" "$code" > version.json
           echo "code=$code" >> "$GITHUB_ENV"
 
       - name: Publish GitHub Release
