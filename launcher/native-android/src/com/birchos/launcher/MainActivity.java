@@ -36,7 +36,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
-  static final int VERSION = 67;
+  static final int VERSION = 70;
   static final String HOST = "birchos.local";
   static final String URL = "https://" + HOST + "/index.html";
   WebView web;
@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
         return Assets.open(MainActivity.this, u.getPath());
       }
       @Override public void onPageFinished(WebView v, String url) {
+        v.evaluateJavascript("(function(){try{var st=document.createElement('style');st.id='birch-perf';st.textContent='#root .glass,#root .glass-strong,#root [class*=backdrop]{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}#root [class*=blur-]{filter:none!important}#root .animate-kenburns,#root .animate-ambient{animation:none!important}#root *{scroll-behavior:auto!important}';if(!document.getElementById('birch-perf'))(document.head||document.documentElement).appendChild(st);try{var k='birch-studio-v2';var s=JSON.parse(localStorage.getItem(k)||'{}');if(s.calm===undefined)s.calm=true;if(s.blur===undefined)s.blur='off';if(s.perfMode===undefined)s.perfMode='fast';if(s.focusPulse===undefined)s.focusPulse=false;localStorage.setItem(k,JSON.stringify(s));}catch(e){}}catch(e){}})();", null);
         try {
           String w = Watch.load(MainActivity.this);
           String js = "(function(){try{var n=JSON.parse(" + JSONObject.quote(w) + ");if(!n||!n.length)return;"
@@ -169,7 +170,7 @@ public class MainActivity extends Activity {
         return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).toString();
       } catch (Throwable t) {
         try { return new JSONObject().put("error", String.valueOf(t.getMessage())).put("current", currentVersion()).toString(); }
-        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":67}"; }
+        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":70}"; }
       } finally { if (c != null) c.disconnect(); }
     }
     @JavascriptInterface public void installUpdate(final String url) {
