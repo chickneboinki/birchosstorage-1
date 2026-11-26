@@ -37,7 +37,7 @@ import org.json.JSONObject;
 
 /** Birch OS home launcher: hosts the web UI and exposes installed apps through window.BirchAndroid. */
 public class MainActivity extends Activity {
-  static final int VERSION = 57;
+  static final int VERSION = 58;
   static final String HOST = "birchos.local";
   static final String URL = "https://" + HOST + "/index.html";
   WebView web;
@@ -45,8 +45,6 @@ public class MainActivity extends Activity {
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
-    // Birch's screensaver is on by default. Hold the screen awake until the page says otherwise,
-    // so the Fire TV system screensaver cannot cover it.
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     web = new WebView(this);
     WebSettings s = web.getSettings();
@@ -78,7 +76,6 @@ public class MainActivity extends Activity {
       web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'ContextMenu'}))", null);
       return true;
     }
-    // Play/pause on the remote toggles Birch Studio, same as v47.
     if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_MEDIA_PLAY || code == KeyEvent.KEYCODE_MEDIA_PAUSE) {
       web.evaluateJavascript("window.__studio&&window.__studio.toggle()", null);
       return true;
@@ -130,7 +127,7 @@ public class MainActivity extends Activity {
     @JavascriptInterface public String checkUpdate() {
       HttpURLConnection c = null;
       try {
-        c = (HttpURLConnection) new URL("https://api.github.com/repos/CronusAquilx/birchosstorage/releases/latest").openConnection();
+        c = (HttpURLConnection) new URL("https://api.github.com/repos/chickneboinki/birchosstorage-1/releases/latest").openConnection();
         c.setConnectTimeout(12000);
         c.setReadTimeout(12000);
         c.setRequestProperty("User-Agent", "BirchOS");
@@ -159,7 +156,7 @@ public class MainActivity extends Activity {
         return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
       } catch (Throwable t) {
         try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", currentVersion()).toString(); }
-        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":57}"; }
+        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":58}"; }
       } finally { if (c != null) c.disconnect(); }
     }
 
@@ -174,7 +171,7 @@ public class MainActivity extends Activity {
             });
             return;
           }
-          Dl.ref = "https://github.com/CronusAquilx/birchosstorage";
+          Dl.ref = "https://github.com/chickneboinki/birchosstorage-1";
           Dl.run(MainActivity.this, url, "Mozilla/5.0 (Linux; Android 11; AFTKA) BirchOS");
         } catch (Throwable t) {
           Dl.note(t);
