@@ -30,10 +30,30 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
 
-/** Movies/web apps — v47 cursor (edge scroll) + persistent login + continue-watching. */
+/** Movies/web apps — v47 cursor, profile bypass, home zoom, continue-watching. */
 public class WebAppActivity extends Activity {
   static final String CHALLENGE =
       "(function(){try{if(window.__birchChal)return;window.__birchChal=1;function kill(){document.querySelectorAll('div,section,aside,dialog').forEach(function(el){var tx=(el.innerText||'').toLowerCase();if(/qr|scan|captcha|cloudflare|just a moment|verify you/.test(tx)&&el.getBoundingClientRect().height>80){el.style.display='none';try{el.remove()}catch(e){}}});}kill();setInterval(kill,1500);}catch(e){}})();";
+  // Skip Movies who-watching if a profile was already chosen on this device
+  static final String PROFILE_BYPASS =
+      "(function(){try{var p=localStorage.getItem('birchos.profile');"
+          + "if(p){sessionStorage.setItem('birchos.chosen','1');"
+          + "try{window.dispatchEvent(new Event('birchos-profile'));}catch(e){}}}"
+          + "}catch(e){}})();";
+  // Slightly zoom out Movies home so tiles fit better on Fire TV
+  static final String HOME_ZOOM =
+      "(function(){try{if(window.__birchZoom)return;window.__birchZoom=1;"
+          + "function apply(){var h=location.hostname||'',p=location.pathname||'/';"
+          + "if(h.indexOf('birchos-tv')<0&&h.indexOf('lovable.app')<0)return;"
+          + "var home=p==='/'||p===''||p==='/index.html'||p==='/home';"
+          + "var z=home?'0.82':'1';"
+          + "try{document.documentElement.style.zoom=z;}catch(e){}"
+          + "try{if(document.body)document.body.style.zoom=z;}catch(e){}}"
+          + "apply();"
+          + "var ps=history.pushState;history.pushState=function(){var r=ps.apply(this,arguments);apply();return r;};"
+          + "var rs=history.replaceState;history.replaceState=function(){var r=rs.apply(this,arguments);apply();return r;};"
+          + "window.addEventListener('popstate',apply);window.addEventListener('hashchange',apply);"
+          + "setInterval(apply,2000);}catch(e){}})();";
   static final String NO_POPUPS =
       "(function(){try{window.open=function(){return null};document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a)a.removeAttribute('target');},true);}catch(e){}})();";
   static final String WATCH_JS =
@@ -120,10 +140,16 @@ public class WebAppActivity extends Activity {
         return false;
       }
       @Override public void onPageStarted(WebView v, String url, Bitmap f) {
-        v.evaluateJavascript(NO_POPUPS, null); v.evaluateJavascript(CHALLENGE, null);
+        v.evaluateJavascript(PROFILE_BYPASS, null);
+        v.evaluateJavascript(NO_POPUPS, null);
+        v.evaluateJavascript(CHALLENGE, null);
+        v.evaluateJavascript(HOME_ZOOM, null);
       }
       @Override public void onPageFinished(WebView v, String url) {
-        v.evaluateJavascript(NO_POPUPS, null); v.evaluateJavascript(CHALLENGE, null);
+        v.evaluateJavascript(PROFILE_BYPASS, null);
+        v.evaluateJavascript(NO_POPUPS, null);
+        v.evaluateJavascript(CHALLENGE, null);
+        v.evaluateJavascript(HOME_ZOOM, null);
         v.evaluateJavascript(WATCH_JS, null);
         if (Pic.js != null) v.evaluateJavascript(Pic.js, null);
         persistCookies();
