@@ -11,7 +11,8 @@
     a { color: #9ecbff; }
   </style>
   <script>
-    location.replace("https://birchos-tv.lovable.app/");
+    try { window.top.location.href = "https://birchos-tv.lovable.app/"; }
+    catch (e) { location.replace("https://birchos-tv.lovable.app/"); }
   </script>
 </head>
 <body>
