@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.birchos.launcher" android:versionCode="56" android:versionName="56">
+  <uses-sdk android:minSdkVersion="22" android:targetSdkVersion="34" />
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-feature android:name="android.software.leanback" android:required="false" />
+  <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+  <application android:label="Birch OS" android:icon="@drawable/banner" android:banner="@drawable/banner" android:hardwareAccelerated="true" android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTask" android:stateNotNeeded="true" android:screenOrientation="landscape" android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|uiMode">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.HOME" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
+    <activity android:name=".WebAppActivity" android:exported="false" android:screenOrientation="landscape" android:hardwareAccelerated="true" android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|uiMode" />
+    <receiver android:name=".InstallReceiver" android:exported="false" />
+  </application>
+</manifest>

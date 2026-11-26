@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BirchOS TV</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #07070b; color: #fff; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; }
+    button, a { cursor: pointer; }
+    header { display: flex; align-items: center; gap: 18px; padding: 22px 36px 8px; }
+    header h1 { font-size: 28px; margin: 0; letter-spacing: -0.03em; }
+    header p { margin: 0; opacity: .65; font-size: 15px; }
+    #q { margin-left: auto; background: #16161e; color: #fff; border: 1px solid #2c2c38; border-radius: 999px; padding: 12px 18px; font-size: 16px; width: 280px; }
+    #q:focus { outline: 3px solid #fff; }
+    .row { padding: 8px 0 18px; }
+    .row h2 { margin: 0 36px 10px; font-size: 20px; font-weight: 650; }
+    .scroller { display: flex; gap: 14px; overflow-x: auto; padding: 6px 36px 12px; scroll-snap-type: x mandatory; }
+    .card { flex: 0 0 168px; scroll-snap-align: start; background: #12121a; border: 0; border-radius: 16px; padding: 0; text-align: left; color: inherit; }
+    .card img { width: 168px; height: 252px; object-fit: cover; border-radius: 16px; display: block; background: #1c1c26; }
+    .card span { display: block; padding: 8px 4px 2px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card:focus { outline: none; transform: scale(1.06); }
+    .card:focus img { outline: 3px solid #fff; outline-offset: 3px; }
+    #player { position: fixed; inset: 0; background: #000; z-index: 5; display: none; flex-direction: column; }
+    #player.on { display: flex; }
+    #bar { display: flex; gap: 12px; align-items: center; padding: 14px 18px; background: #0c0c12; }
+    #bar button, #bar select { background: #1c1c26; color: #fff; border: 0; border-radius: 12px; padding: 10px 14px; font-size: 16px; }
+    #bar button:focus, #bar select:focus { outline: 3px solid #fff; }
+    #title { font-size: 18px; font-weight: 650; flex: 1; }
+    iframe { flex: 1; border: 0; width: 100%; background: #000; }
+    #empty { padding: 40px; opacity: .7; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>BirchOS TV</h1>
+      <p>Movies and shows. Playback uses FrameXTV.</p>
+    </div>
+    <input id="q" placeholder="Search" />
+  </header>
+  <div id="rows"></div>
+  <div id="player">
+    <div id="bar">
+      <button id="back" type="button">Back</button>
+      <div id="title"></div>
+      <select id="season" hidden></select>
+      <select id="episode" hidden></select>
+    </div>
+    <iframe id="frame" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="origin"></iframe>
+  </div>
+  <script>
+    var KEY = "0ea74aa80d71c4dc484c0a58f26ea7b8";
+    var rows = document.getElementById("rows");
+    var player = document.getElementById("player");
+    var frame = document.getElementById("frame");
+    var titleEl = document.getElementById("title");
+    var seasonEl = document.getElementById("season");
+    var episodeEl = document.getElementById("episode");
+    var current = null;
+
+    function img(p) { return p ? "https://image.tmdb.org/t/p/w342" + p : ""; }
+    function get(path) {
+      return fetch("https://api.themoviedb.org/3" + path + (path.indexOf("?") >= 0 ? "&" : "?") + "api_key=" + KEY + "&language=en-US").then(function (r) { return r.json(); });
+    }
+    function card(item, kind) {
+      var b = document.createElement("button");
+      b.className = "card";
+      b.type = "button";
+      var im = document.createElement("img");
+      im.alt = "";
+      im.src = img(item.poster_path);
+      var s = document.createElement("span");
+      s.textContent = item.title || item.name;
+      b.appendChild(im); b.appendChild(s);
+      b.onclick = function () { openItem(item, kind); };
+      return b;
+    }
+    function section(label, items, kind) {
+      var wrap = document.createElement("section");
+      wrap.className = "row";
+      var h = document.createElement("h2");
+      h.textContent = label;
+      var sc = document.createElement("div");
+      sc.className = "scroller";
+      items.forEach(function (it) { if (it && it.poster_path) sc.appendChild(card(it, kind)); });
+      wrap.appendChild(h); wrap.appendChild(sc);
+      return wrap;
+    }
+    function report() {
+      if (!current || !window.BirchWatch) return;
+      var s = seasonEl.value, e = episodeEl.value;
+      var meta = current.kind === "tv" ? ("S" + s + " E" + e) : "Movie";
+      var url = location.href.split("#")[0] + "#/" + (current.kind === "tv" ? ("tv/" + current.id + "/" + s + "/" + e) : ("movie/" + current.id));
+      window.BirchWatch.save(JSON.stringify({
+        title: current.title, img: img(current.poster_path), url: url, meta: meta,
+        season: current.kind === "tv" ? +s : null, episode: current.kind === "tv" ? +e : null, t: Date.now()
+      }));
+    }
+    function srcFor() {
+      if (!current) return "about:blank";
+      if (current.kind === "tv") return "https://framextv.cc/embed/" + current.id + "/" + (seasonEl.value || 1) + "/" + (episodeEl.value || 1) + "?autoplay=1";
+      return "https://framextv.cc/embed/" + current.id + "?autoplay=1";
+    }
+    function showPlayer() {
+      titleEl.textContent = current.title + (current.kind === "tv" ? "  S" + seasonEl.value + " E" + episodeEl.value : "");
+      frame.src = srcFor();
+      player.className = "on";
+      document.getElementById("back").focus();
+      history.replaceState(null, "", location.pathname + location.search + "#/" + (current.kind === "tv" ? ("tv/" + current.id + "/" + seasonEl.value + "/" + episodeEl.value) : ("movie/" + current.id)));
+      report();
+    }
+    function fillEpisodes(n) {
+      episodeEl.innerHTML = "";
+      for (var i = 1; i <= Math.max(1, n); i++) {
+        var o = document.createElement("option");
+        o.value = i; o.textContent = "Episode " + i;
+        episodeEl.appendChild(o);
+      }
+    }
+    function openItem(item, kind, season, episode) {
+      current = { id: item.id, title: item.title || item.name, poster_path: item.poster_path, kind: kind };
+      if (kind !== "tv") { seasonEl.hidden = episodeEl.hidden = true; showPlayer(); return; }
+      seasonEl.hidden = episodeEl.hidden = false;
+      get("/tv/" + item.id).then(function (d) {
+        var seasons = (d.seasons || []).filter(function (s) { return s.season_number > 0; });
+        if (!seasons.length) seasons = [{ season_number: 1, episode_count: d.number_of_episodes || 1 }];
+        seasonEl.innerHTML = "";
+        seasons.forEach(function (s) {
+          var o = document.createElement("option");
+          o.value = s.season_number; o.textContent = "Season " + s.season_number;
+          o.dataset.eps = s.episode_count || 1;
+          seasonEl.appendChild(o);
+        });
+        var want = season || 1;
+        seasonEl.value = String(want);
+        if (seasonEl.selectedIndex < 0) seasonEl.selectedIndex = 0;
+        var eps = +(seasonEl.options[seasonEl.selectedIndex].dataset.eps || 1);
+        fillEpisodes(eps);
+        episodeEl.value = String(episode || 1);
+        if (episodeEl.selectedIndex < 0) episodeEl.selectedIndex = 0;
+        showPlayer();
+      }).catch(function () { seasonEl.hidden = episodeEl.hidden = true; current.kind = "movie"; showPlayer(); });
+    }
+    seasonEl.onchange = function () {
+      var eps = +(seasonEl.options[seasonEl.selectedIndex].dataset.eps || 1);
+      fillEpisodes(eps); showPlayer();
+    };
+    episodeEl.onchange = showPlayer;
+    document.getElementById("back").onclick = function () {
+      player.className = "";
+      frame.src = "about:blank";
+      history.replaceState(null, "", location.pathname);
+    };
+    window.addEventListener("message", function (ev) {
+      var d = ev.data;
+      if (typeof d === "string") { try { d = JSON.parse(d); } catch (e) { return; } }
+      if (!d || typeof d !== "object") return;
+      var ct = d.currentTime != null ? d.currentTime : (d.data && d.data.currentTime);
+      if (ct == null || !current) return;
+      report();
+    });
+    function boot(hash) {
+      var m = (hash || "").match(/^#\/tv\/(\d+)\/(\d+)\/(\d+)/);
+      if (m) { get("/tv/" + m[1]).then(function (d) { openItem(d, "tv", +m[2], +m[3]); }); return; }
+      m = (hash || "").match(/^#\/movie\/(\d+)/);
+      if (m) { get("/movie/" + m[1]).then(function (d) { openItem(d, "movie"); }); }
+    }
+    Promise.all([
+      get("/movie/now_playing"),
+      get("/movie/popular"),
+      get("/tv/on_the_air"),
+      get("/trending/tv/week")
+    ]).then(function (all) {
+      rows.appendChild(section("New movies", (all[0].results || []).slice(0, 18), "movie"));
+      rows.appendChild(section("Popular movies", (all[1].results || []).slice(0, 18), "movie"));
+      rows.appendChild(section("On TV", (all[2].results || []).slice(0, 18), "tv"));
+      rows.appendChild(section("Trending shows", (all[3].results || []).slice(0, 18), "tv"));
+      var first = rows.querySelector("button");
+      if (first && !location.hash) first.focus();
+      boot(location.hash);
+    }).catch(function () {
+      rows.innerHTML = "<p id='empty'>Couldn't reach the movie guide. Check the Fire TV's internet connection.</p>";
+    });
+    var q = document.getElementById("q");
+    q.addEventListener("change", function () {
+      var term = q.value.trim();
+      if (!term) return;
+      get("/search/multi?query=" + encodeURIComponent(term)).then(function (d) {
+        var box = document.getElementById("search-row");
+        if (box) box.remove();
+        var items = (d.results || []).filter(function (x) { return x.media_type === "movie" || x.media_type === "tv"; });
+        var sec = section("Search", items, "movie");
+        sec.id = "search-row";
+        sec.querySelectorAll("button").forEach(function (b, i) { b.onclick = function () { openItem(items[i], items[i].media_type === "tv" ? "tv" : "movie"); }; });
+        rows.insertBefore(sec, rows.firstChild);
+      });
+    });
+  </script>
+</body>
+</html>
