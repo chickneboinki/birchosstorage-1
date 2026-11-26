@@ -16,21 +16,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check signing secrets
+        env:
+          KS_B64: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.BIRCH_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.BIRCH_KEY_PASSWORD }}
+        run: |
+          set -e
+          echo "BIRCH_KEYSTORE_BASE64 length: ${#KS_B64}"
+          echo "BIRCH_KEYSTORE_PASSWORD set: $([ -n "$KS_PASS" ] && echo yes || echo no)"
+          echo "BIRCH_KEY_ALIAS set: $([ -n "$KEY_ALIAS" ] && echo yes || echo no)"
+          echo "BIRCH_KEY_PASSWORD set: $([ -n "$KEY_PASS" ] && echo yes || echo no)"
+          if [ -z "$KS_B64" ]; then
+            echo "::error::Missing secret BIRCH_KEYSTORE_BASE64. Paste the full base64 of birch-release.jks (one line)."
+            exit 1
+          fi
+          # Decode and validate keystore early
+          printf '%s' "$KS_B64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
+          ls -la "$RUNNER_TEMP/birch.jks"
+          # Defaults
+          export BIRCH_KEYSTORE_PASSWORD="${KS_PASS:-birchos}"
+          export BIRCH_KEY_ALIAS="${KEY_ALIAS:-birch}"
+          export BIRCH_KEY_PASSWORD="${KEY_PASS:-$BIRCH_KEYSTORE_PASSWORD}"
+          keytool -list -keystore "$RUNNER_TEMP/birch.jks" -storepass "$BIRCH_KEYSTORE_PASSWORD" || {
+            echo "::error::Keystore open failed. Check BIRCH_KEYSTORE_BASE64 and BIRCH_KEYSTORE_PASSWORD (default birchos)."
+            exit 1
+          }
+          echo "Keystore OK"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: android-actions/setup-android@v3
+
       - name: Android SDK 34
-        run: yes | sdkmanager --licenses >/dev/null || true; sdkmanager "platforms;android-34" "build-tools;34.0.0"
-      - name: Check the signing secret
-        env:
-          A: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$A" ]; then
-            echo "::error::Missing secret BIRCH_KEYSTORE_BASE64 (base64 of the Birch keystore). Passwords default to birchos / alias birch."
-            exit 1
-          fi
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
       - name: Build and sign
         env:
           BT: ${{ env.ANDROID_SDK_ROOT }}/build-tools/34.0.0
@@ -38,25 +65,28 @@ jobs:
           BIRCH_KEYSTORE_PASSWORD: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
           BIRCH_KEY_ALIAS: ${{ secrets.BIRCH_KEY_ALIAS }}
           BIRCH_KEY_PASSWORD: ${{ secrets.BIRCH_KEY_PASSWORD }}
+          KS_B64: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
           VERSION_CODE: ${{ github.run_number }}
         run: |
-          # Keep updates newer than the v56 sideload. run_number starts small on a new workflow, so add 56.
+          set -euo pipefail
           export VERSION_CODE=$((56 + VERSION_CODE))
           echo "$VERSION_CODE" > /tmp/version_code.txt
-          # Defaults from README when optional secrets are empty
+          echo "Building versionCode=$VERSION_CODE"
           export BIRCH_KEYSTORE_PASSWORD="${BIRCH_KEYSTORE_PASSWORD:-birchos}"
           export BIRCH_KEY_ALIAS="${BIRCH_KEY_ALIAS:-birch}"
           export BIRCH_KEY_PASSWORD="${BIRCH_KEY_PASSWORD:-$BIRCH_KEYSTORE_PASSWORD}"
-          mkdir -p "$RUNNER_TEMP"
-          echo "${{ secrets.BIRCH_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/birch.jks"
+          printf '%s' "$KS_B64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
           export KS="$RUNNER_TEMP/birch.jks"
           bash launcher/native-android/build.sh
+          ls -la /tmp/birch-build/birchos-launcher.apk
           rm -f "$RUNNER_TEMP/birch.jks"
+
       - name: version.json
         run: |
           code=$(cat /tmp/version_code.txt)
           printf '{"versionCode":%s,"versionName":"%s"}\n' "$code" "$code" > version.json
           echo "code=$code" >> "$GITHUB_ENV"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
