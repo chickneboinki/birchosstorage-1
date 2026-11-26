@@ -23,7 +23,6 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -36,16 +35,19 @@ import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Birch OS home launcher: hosts the web UI and exposes installed apps through window.BirchAndroid. */
 public class MainActivity extends Activity {
-  static final int VERSION = 66;
+  static final int VERSION = 67;
   static final String HOST = "birchos.local";
   static final String URL = "https://" + HOST + "/index.html";
   WebView web;
   final Map<String, String> iconCache = new HashMap<>();
+  static boolean processStarted;
+  boolean coldStart;
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
+    coldStart = !processStarted;
+    processStarted = true;
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
     web = new WebView(this);
     WebSettings s = web.getSettings();
@@ -54,7 +56,6 @@ public class MainActivity extends Activity {
     s.setDatabaseEnabled(true);
     s.setMediaPlaybackRequiresUserGesture(false);
     s.setCacheMode(WebSettings.LOAD_DEFAULT);
-    s.setOffscreenPreRaster(true);
     web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     CookieManager.getInstance().setAcceptCookie(true);
     CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
@@ -66,6 +67,18 @@ public class MainActivity extends Activity {
         WebResourceResponse prox = Prox.handle(u);
         if (prox != null) return prox;
         return Assets.open(MainActivity.this, u.getPath());
+      }
+      @Override public void onPageFinished(WebView v, String url) {
+        try {
+          String w = Watch.load(MainActivity.this);
+          String js = "(function(){try{var n=JSON.parse(" + JSONObject.quote(w) + ");if(!n||!n.length)return;"
+            + "var cur=[];try{cur=JSON.parse(localStorage.getItem('birch-watch-v1')||'[]')}catch(e){}"
+            + "var map={};cur.forEach(function(x){if(x&&x.url)map[x.url]=x;});"
+            + "n.forEach(function(x){if(x&&x.url)map[x.url]=Object.assign({},map[x.url]||{},x);});"
+            + "var out=Object.keys(map).map(function(k){return map[k];}).sort(function(a,b){return(b.t||0)-(a.t||0)}).slice(0,20);"
+            + "localStorage.setItem('birch-watch-v1',JSON.stringify(out));}catch(e){}})();";
+          v.evaluateJavascript(js, null);
+        } catch (Throwable ignored) {}
       }
     });
     web.addJavascriptInterface(new Bridge(), "BirchAndroid");
@@ -86,10 +99,6 @@ public class MainActivity extends Activity {
   @Override public boolean onKeyDown(int code, KeyEvent e) {
     if (code == KeyEvent.KEYCODE_MENU) {
       web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'ContextMenu'}))", null);
-      return true;
-    }
-    if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_MEDIA_PLAY || code == KeyEvent.KEYCODE_MEDIA_PAUSE) {
-      web.evaluateJavascript("window.__studio&&window.__studio.toggle()", null);
       return true;
     }
     return super.onKeyDown(code, e);
@@ -123,32 +132,27 @@ public class MainActivity extends Activity {
       try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; }
       catch (Throwable t) { return VERSION; }
     }
-
     @JavascriptInterface public void setPicture(String js) { Pic.js = js; }
-
     @JavascriptInterface public void setKeepScreenOn(boolean on) {
       runOnUiThread(() -> {
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
       });
     }
-
     @JavascriptInterface public void saveWatch(String json) { Watch.save(MainActivity.this, json); }
     @JavascriptInterface public String loadWatch() { return Watch.load(MainActivity.this); }
-
+    @JavascriptInterface public boolean isColdStart() { boolean c = coldStart; coldStart = false; return c; }
     @JavascriptInterface public String checkUpdate() {
       HttpURLConnection c = null;
       try {
         c = (HttpURLConnection) new URL("https://api.github.com/repos/chickneboinki/birchosstorage-1/releases/latest").openConnection();
-        c.setConnectTimeout(12000);
-        c.setReadTimeout(12000);
+        c.setConnectTimeout(12000); c.setReadTimeout(12000);
         c.setRequestProperty("User-Agent", "BirchOS");
         c.setRequestProperty("Accept", "application/vnd.github+json");
         int code = c.getResponseCode();
         InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int n;
+        byte[] buf = new byte[8192]; int n;
         while (in != null && (n = in.read(buf)) > 0) bo.write(buf, 0, n);
         if (code >= 400) return new JSONObject().put("error", "GitHub HTTP " + code).put("current", currentVersion()).toString();
         JSONObject rel = new JSONObject(bo.toString("utf-8"));
@@ -158,20 +162,16 @@ public class MainActivity extends Activity {
         if (!digits.isEmpty()) remote = Integer.parseInt(digits);
         String apk = "";
         JSONArray assets = rel.optJSONArray("assets");
-        if (assets != null) {
-          for (int i = 0; i < assets.length(); i++) {
-            JSONObject a = assets.getJSONObject(i);
-            String name = a.optString("name", "");
-            if (name.endsWith(".apk")) { apk = a.optString("browser_download_url", ""); break; }
-          }
+        if (assets != null) for (int i = 0; i < assets.length(); i++) {
+          JSONObject a = assets.getJSONObject(i);
+          if (a.optString("name", "").endsWith(".apk")) { apk = a.optString("browser_download_url", ""); break; }
         }
-        return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
+        return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).toString();
       } catch (Throwable t) {
-        try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", currentVersion()).toString(); }
-        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":66}"; }
+        try { return new JSONObject().put("error", String.valueOf(t.getMessage())).put("current", currentVersion()).toString(); }
+        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":67}"; }
       } finally { if (c != null) c.disconnect(); }
     }
-
     @JavascriptInterface public void installUpdate(final String url) {
       runOnUiThread(() -> android.widget.Toast.makeText(MainActivity.this, "Downloading Birch OS update...", android.widget.Toast.LENGTH_LONG).show());
       new Thread(() -> {
@@ -184,14 +184,13 @@ public class MainActivity extends Activity {
             return;
           }
           Dl.ref = "https://github.com/chickneboinki/birchosstorage-1";
-          Dl.run(MainActivity.this, url, "Mozilla/5.0 (Linux; Android 11; AFTKA) BirchOS");
+          Dl.run(MainActivity.this, url, "Mozilla/5.0 BirchOS");
         } catch (Throwable t) {
           Dl.note(t);
           runOnUiThread(() -> android.widget.Toast.makeText(MainActivity.this, "Update failed: " + Dl.err, android.widget.Toast.LENGTH_LONG).show());
         }
       }).start();
     }
-
     @JavascriptInterface public String getInstalledApps() {
       PackageManager pm = getPackageManager();
       JSONArray arr = new JSONArray();
@@ -221,7 +220,6 @@ public class MainActivity extends Activity {
       }
       return arr.toString();
     }
-
     @JavascriptInterface public boolean launchApp(String pkg) {
       PackageManager pm = getPackageManager();
       Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);
@@ -229,21 +227,13 @@ public class MainActivity extends Activity {
       if (i == null) return false;
       i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
       final Intent li = i;
-      runOnUiThread(() -> {
-        try {
-          startActivity(li, android.app.ActivityOptions.makeCustomAnimation(MainActivity.this, 0, 0).toBundle());
-        } catch (Throwable t) { startActivity(li); }
-      });
+      runOnUiThread(() -> { try { startActivity(li, android.app.ActivityOptions.makeCustomAnimation(MainActivity.this, 0, 0).toBundle()); } catch (Throwable t) { startActivity(li); } });
       return true;
     }
-
     @JavascriptInterface public void openStore(String pkg) {
       String[] uris = { "amzn://apps/android?p=" + pkg, "market://details?id=" + pkg, "https://www.amazon.com/gp/mas/dl/android?p=" + pkg };
-      for (String u : uris) {
-        try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Throwable t) {}
-      }
+      for (String u : uris) { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(u)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; } catch (Throwable t) {} }
     }
-
     @JavascriptInterface public boolean openSystemSettings(String panel) {
       String a = Settings.ACTION_SETTINGS;
       if ("wifi".equals(panel)) a = Settings.ACTION_WIFI_SETTINGS;
@@ -251,23 +241,17 @@ public class MainActivity extends Activity {
       else if ("display".equals(panel)) a = Settings.ACTION_DISPLAY_SETTINGS;
       else if ("audio".equals(panel)) a = Settings.ACTION_SOUND_SETTINGS;
       try { startActivity(new Intent(a).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true; }
-      catch (Throwable t) {
-        try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true; } catch (Throwable t2) { return false; }
-      }
+      catch (Throwable t) { try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return true; } catch (Throwable t2) { return false; } }
     }
-
     @JavascriptInterface public void openAppInfo(String pkg) {
       startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
-
     @JavascriptInterface public void uninstall(String pkg) {
       startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
-
     @JavascriptInterface public void openWebApp(String url) {
       startActivity(new Intent(MainActivity.this, WebAppActivity.class).putExtra("url", url));
     }
-
     @JavascriptInterface public String version() { return String.valueOf(currentVersion()); }
   }
 }
