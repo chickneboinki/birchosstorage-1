@@ -30,17 +30,31 @@ import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
 
-/** Movies/web apps — v47 cursor, profile bypass, home zoom, continue-watching. */
+/** Movies/web apps — QR kill, inline video, profile bypass, v47 cursor. */
 public class WebAppActivity extends Activity {
   static final String CHALLENGE =
-      "(function(){try{if(window.__birchChal)return;window.__birchChal=1;function kill(){document.querySelectorAll('div,section,aside,dialog').forEach(function(el){var tx=(el.innerText||'').toLowerCase();if(/qr|scan|captcha|cloudflare|just a moment|verify you/.test(tx)&&el.getBoundingClientRect().height>80){el.style.display='none';try{el.remove()}catch(e){}}});}kill();setInterval(kill,1500);}catch(e){}})();";
-  // Skip Movies who-watching if a profile was already chosen on this device
+      "(function(){try{if(window.__birchChal2)return;window.__birchChal2=1;"
+          + "function kill(){try{"
+          + "var re=/qr|scan this|scan the|identif|verify you|are you human|bot check|cloudflare|just a moment|checking your browser|30\\s*sec|attention required|captcha|press and hold|i'?m not a robot/i;"
+          + "document.querySelectorAll('div,section,aside,dialog,main,form').forEach(function(el){"
+          + "var tx=(el.innerText||'').slice(0,500);if(!re.test(tx))return;"
+          + "var r=el.getBoundingClientRect();if(r.width<100||r.height<60)return;"
+          + "el.querySelectorAll('button,a,span,[role=button],svg').forEach(function(c){"
+          + "var ct=(c.innerText||c.getAttribute('aria-label')||'').toLowerCase();"
+          + "if(/^(x|×|close|dismiss|skip|continue|allow|got it)$/i.test(ct.trim())||ct.indexOf('close')>=0){try{c.click()}catch(e){}}});"
+          + "el.style.setProperty('display','none','important');el.style.setProperty('visibility','hidden','important');"
+          + "el.style.setProperty('pointer-events','none','important');el.style.setProperty('opacity','0','important');"
+          + "try{el.remove()}catch(e){}});"
+          + "document.querySelectorAll('iframe').forEach(function(f){var s=f.src||'';"
+          + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr/i.test(s)){f.style.display='none';try{f.remove()}catch(e){}});"
+          + "}catch(e){}}kill();setInterval(kill,700);"
+          + "try{new MutationObserver(kill).observe(document.documentElement,{childList:true,subtree:true})}catch(e){}"
+          + "}catch(e){}})();";
   static final String PROFILE_BYPASS =
       "(function(){try{var p=localStorage.getItem('birchos.profile');"
           + "if(p){sessionStorage.setItem('birchos.chosen','1');"
           + "try{window.dispatchEvent(new Event('birchos-profile'));}catch(e){}}}"
           + "}catch(e){}})();";
-  // Slightly zoom out Movies home so tiles fit better on Fire TV
   static final String HOME_ZOOM =
       "(function(){try{if(window.__birchZoom)return;window.__birchZoom=1;"
           + "function apply(){var h=location.hostname||'',p=location.pathname||'/';"
@@ -52,8 +66,22 @@ public class WebAppActivity extends Activity {
           + "apply();"
           + "var ps=history.pushState;history.pushState=function(){var r=ps.apply(this,arguments);apply();return r;};"
           + "var rs=history.replaceState;history.replaceState=function(){var r=rs.apply(this,arguments);apply();return r;};"
-          + "window.addEventListener('popstate',apply);window.addEventListener('hashchange',apply);"
-          + "setInterval(apply,2000);}catch(e){}})();";
+          + "window.addEventListener('popstate',apply);setInterval(apply,2000);}catch(e){}})();";
+  static final String VIDEO_FIX =
+      "(function(){try{if(window.__birchVid)return;window.__birchVid=1;"
+          + "var st=document.createElement('style');st.id='birch-vid';"
+          + "st.textContent='video,iframe[src*=player],iframe[src*=embed]{opacity:1!important;visibility:visible!important;display:block!important;max-width:100%!important;width:100%!important;max-height:85vh!important;object-fit:contain!important;background:#000!important;z-index:20!important}'"
+          + "+'.plyr,.jwplayer,[class*=player],[class*=Player],[id*=player],[id*=Player]{opacity:1!important;visibility:visible!important;min-height:240px!important;background:#000!important}';"
+          + "(document.head||document.documentElement).appendChild(st);"
+          + "function fix(){document.querySelectorAll('video').forEach(function(v){"
+          + "v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');"
+          + "v.style.opacity='1';v.style.visibility='visible';v.style.display='block';"
+          + "v.style.width='100%';v.style.maxHeight='85vh';v.style.objectFit='contain';"
+          + "var p=v.parentElement;for(var i=0;i<6&&p;i++){"
+          + "var cs=getComputedStyle(p);if(cs.opacity==='0'||cs.visibility==='hidden'){p.style.opacity='1';p.style.visibility='visible'}"
+          + "if(p.offsetHeight<40&&v.videoHeight){p.style.minHeight=Math.min(480,v.videoHeight)+'px'}"
+          + "p=p.parentElement;}});}"
+          + "fix();setInterval(fix,1500);document.addEventListener('play',fix,true);}catch(e){}})();";
   static final String NO_POPUPS =
       "(function(){try{window.open=function(){return null};document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a)a.removeAttribute('target');},true);}catch(e){}})();";
   static final String WATCH_JS =
@@ -106,7 +134,8 @@ public class WebAppActivity extends Activity {
     root = new FrameLayout(this);
     root.setBackgroundColor(0xFF000000);
     web = new WebView(this);
-    web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+    // LAYER_TYPE_NONE helps Fire TV show inline video (not black until fullscreen)
+    web.setLayerType(View.LAYER_TYPE_NONE, null);
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(true);
@@ -144,12 +173,14 @@ public class WebAppActivity extends Activity {
         v.evaluateJavascript(NO_POPUPS, null);
         v.evaluateJavascript(CHALLENGE, null);
         v.evaluateJavascript(HOME_ZOOM, null);
+        v.evaluateJavascript(VIDEO_FIX, null);
       }
       @Override public void onPageFinished(WebView v, String url) {
         v.evaluateJavascript(PROFILE_BYPASS, null);
         v.evaluateJavascript(NO_POPUPS, null);
         v.evaluateJavascript(CHALLENGE, null);
         v.evaluateJavascript(HOME_ZOOM, null);
+        v.evaluateJavascript(VIDEO_FIX, null);
         v.evaluateJavascript(WATCH_JS, null);
         if (Pic.js != null) v.evaluateJavascript(Pic.js, null);
         persistCookies();
