@@ -26,7 +26,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import java.io.ByteArrayInputStream;
+import java.io.File;
 
 /** Full-screen WebView for built-in and remote apps (Movies, etc.). */
 public class WebAppActivity extends Activity {
@@ -370,11 +370,13 @@ public class WebAppActivity extends Activity {
   }
 
   void installApk(String url, String ua) {
-    Toast.makeText(this, "Downloading update…", Toast.LENGTH_SHORT).show();
+    Toast.makeText(this, "Downloading…", Toast.LENGTH_SHORT).show();
     new Thread(
             () -> {
               try {
-                Dl.fetch(url, ua);
+                File out = new File(getCacheDir(), "download.apk");
+                Dl.fetch(url, ua, out, null);
+                Dl.install(WebAppActivity.this, out);
               } catch (Throwable t) {
                 runOnUiThread(
                     () -> Toast.makeText(this, "Download failed", Toast.LENGTH_LONG).show());
