@@ -8,4 +8,11 @@ GitHub Actions builds a signed APK and publishes it as a Release on this repo. T
 
 The workflow only needs one secret, `BIRCH_KEYSTORE_BASE64` (the Birch keystore file, base64-encoded). Passwords are `birchos` and the alias is `birch`; they are used only on the builder, not stored in the repo.
 
-If that secret is already set, you don't have to do anything. Pushing launcher changes builds the next APK.
+Optional secrets (defaults shown):
+- `BIRCH_KEYSTORE_PASSWORD` = `birchos`
+- `BIRCH_KEY_ALIAS` = `birch`
+- `BIRCH_KEY_PASSWORD` = `birchos`
+
+If `BIRCH_KEYSTORE_BASE64` is set, pushing launcher changes builds the next APK.
+
+Repo: https://github.com/chickneboinki/birchosstorage-1
