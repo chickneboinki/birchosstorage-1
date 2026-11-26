@@ -26,17 +26,15 @@ jobs:
         run: |
           set -e
           echo "BIRCH_KEYSTORE_BASE64 length: ${#KS_B64}"
-          echo "BIRCH_KEYSTORE_PASSWORD set: $([ -n "$KS_PASS" ] && echo yes || echo no)"
-          echo "BIRCH_KEY_ALIAS set: $([ -n "$KEY_ALIAS" ] && echo yes || echo no)"
-          echo "BIRCH_KEY_PASSWORD set: $([ -n "$KEY_PASS" ] && echo yes || echo no)"
+          echo "BIRCH_KEYSTORE_PASSWORD set: $([ -n \"$KS_PASS\" ] && echo yes || echo no)"
+          echo "BIRCH_KEY_ALIAS set: $([ -n \"$KEY_ALIAS\" ] && echo yes || echo no)"
+          echo "BIRCH_KEY_PASSWORD set: $([ -n \"$KEY_PASS\" ] && echo yes || echo no)"
           if [ -z "$KS_B64" ]; then
             echo "::error::Missing secret BIRCH_KEYSTORE_BASE64. Paste the full base64 of birch-release.jks (one line)."
             exit 1
           fi
-          # Decode and validate keystore early
-          printf '%s' "$KS_B64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
+          printf '%s' "$KS_B64" | tr -d '\\n\\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
           ls -la "$RUNNER_TEMP/birch.jks"
-          # Defaults
           export BIRCH_KEYSTORE_PASSWORD="${KS_PASS:-birchos}"
           export BIRCH_KEY_ALIAS="${KEY_ALIAS:-birch}"
           export BIRCH_KEY_PASSWORD="${KEY_PASS:-$BIRCH_KEYSTORE_PASSWORD}"
@@ -69,13 +67,14 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          export VERSION_CODE=$((56 + VERSION_CODE))
+          # Sideloaded builds went to 59; keep Actions releases always newer
+          export VERSION_CODE=$((59 + VERSION_CODE))
           echo "$VERSION_CODE" > /tmp/version_code.txt
           echo "Building versionCode=$VERSION_CODE"
           export BIRCH_KEYSTORE_PASSWORD="${BIRCH_KEYSTORE_PASSWORD:-birchos}"
           export BIRCH_KEY_ALIAS="${BIRCH_KEY_ALIAS:-birch}"
           export BIRCH_KEY_PASSWORD="${BIRCH_KEY_PASSWORD:-$BIRCH_KEYSTORE_PASSWORD}"
-          printf '%s' "$KS_B64" | tr -d '\n\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
+          printf '%s' "$KS_B64" | tr -d '\\n\\r ' | base64 -d > "$RUNNER_TEMP/birch.jks"
           export KS="$RUNNER_TEMP/birch.jks"
           bash launcher/native-android/build.sh
           ls -la /tmp/birch-build/birchos-launcher.apk
@@ -84,7 +83,7 @@ jobs:
       - name: version.json
         run: |
           code=$(cat /tmp/version_code.txt)
-          printf '{"versionCode":%s,"versionName":"%s"}\n' "$code" "$code" > version.json
+          printf '{\"versionCode\":%s,\"versionName\":\"%s\"}\\n' "$code" "$code" > version.json
           echo "code=$code" >> "$GITHUB_ENV"
 
       - name: Publish GitHub Release
