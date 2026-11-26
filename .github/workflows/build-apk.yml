@@ -23,19 +23,14 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Android SDK 34
         run: yes | sdkmanager --licenses >/dev/null || true; sdkmanager "platforms;android-34" "build-tools;34.0.0"
-      - name: Check the signing secrets
+      - name: Check the signing secret
         env:
           A: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
-          B: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
-          C: ${{ secrets.BIRCH_KEY_ALIAS }}
-          D: ${{ secrets.BIRCH_KEY_PASSWORD }}
         run: |
-          missing=0
-          [ -n "$A" ] || { echo "::error::Missing secret BIRCH_KEYSTORE_BASE64"; missing=1; }
-          [ -n "$B" ] || { echo "::error::Missing secret BIRCH_KEYSTORE_PASSWORD"; missing=1; }
-          [ -n "$C" ] || { echo "::error::Missing secret BIRCH_KEY_ALIAS"; missing=1; }
-          [ -n "$D" ] || { echo "::error::Missing secret BIRCH_KEY_PASSWORD"; missing=1; }
-          exit $missing
+          if [ -z "$A" ]; then
+            echo "::error::Missing secret BIRCH_KEYSTORE_BASE64 (base64 of the Birch keystore). Passwords default to birchos / alias birch."
+            exit 1
+          fi
       - name: Build and sign
         env:
           BT: ${{ env.ANDROID_SDK_ROOT }}/build-tools/34.0.0
@@ -48,6 +43,10 @@ jobs:
           # Keep updates newer than the v56 sideload. run_number starts small on a new workflow, so add 56.
           export VERSION_CODE=$((56 + VERSION_CODE))
           echo "$VERSION_CODE" > /tmp/version_code.txt
+          # Defaults from README when optional secrets are empty
+          export BIRCH_KEYSTORE_PASSWORD="${BIRCH_KEYSTORE_PASSWORD:-birchos}"
+          export BIRCH_KEY_ALIAS="${BIRCH_KEY_ALIAS:-birch}"
+          export BIRCH_KEY_PASSWORD="${BIRCH_KEY_PASSWORD:-$BIRCH_KEYSTORE_PASSWORD}"
           mkdir -p "$RUNNER_TEMP"
           echo "${{ secrets.BIRCH_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/birch.jks"
           export KS="$RUNNER_TEMP/birch.jks"
