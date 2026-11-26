@@ -37,7 +37,7 @@ import org.json.JSONObject;
 
 /** Birch OS home launcher: hosts the web UI and exposes installed apps through window.BirchAndroid. */
 public class MainActivity extends Activity {
-  static final int VERSION = 56;
+  static final int VERSION = 57;
   static final String HOST = "birchos.local";
   static final String URL = "https://" + HOST + "/index.html";
   WebView web;
@@ -159,7 +159,7 @@ public class MainActivity extends Activity {
         return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
       } catch (Throwable t) {
         try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", currentVersion()).toString(); }
-        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":56}"; }
+        catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":57}"; }
       } finally { if (c != null) c.disconnect(); }
     }
 
