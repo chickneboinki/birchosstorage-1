@@ -14,7 +14,7 @@ OUT=${OUT:-/tmp/birch-build}
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -A assets -o "$OUT/base.apk" "$OUT/res.zip" --auto-add-overlay
-javac -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
+javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unaligned.apk"
 python3 - "$OUT/unaligned.apk" "$OUT/dex/classes.dex" << 'PY'
