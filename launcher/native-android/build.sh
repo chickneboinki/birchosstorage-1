@@ -3,6 +3,11 @@
 # Needs: Android build-tools 34 + platform android-34 (BT, PF), and a JDK 17.
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ -n "${VERSION_CODE:-}" ]; then
+  sed -i "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$VERSION_CODE\"/" AndroidManifest.xml
+  sed -i "s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION_CODE\"/" AndroidManifest.xml
+  sed -i "s/var ai=\`[0-9][0-9]*\`/var ai=\`$VERSION_CODE\`/" assets/www/assets/index-*.js || true
+fi
 BT=${BT:-/tmp/sdk/build-tools/34.0.0}
 JAR=${PF:-/tmp/sdk/platforms/android-34}/android.jar
 OUT=${OUT:-/tmp/birch-build}
@@ -20,6 +25,9 @@ with zipfile.ZipFile(apk, "a", compression=zipfile.ZIP_DEFLATED) as z:
 PY
 "$BT/zipalign" -f -p 4 "$OUT/unaligned.apk" "$OUT/aligned.apk"
 KS=${KS:-$(pwd)/keystore/birch-release.jks}
-"$BT/apksigner" sign --ks "$KS" --ks-pass pass:birchos --key-pass pass:birchos --ks-key-alias birch --out "$OUT/birchos-launcher.apk" "$OUT/aligned.apk"
+KS_PASS=${BIRCH_KEYSTORE_PASSWORD:-${KS_PASS:-birchos}}
+KEY_ALIAS=${BIRCH_KEY_ALIAS:-${KEY_ALIAS:-birch}}
+KEY_PASS=${BIRCH_KEY_PASSWORD:-${KEY_PASS:-$KS_PASS}}
+"$BT/apksigner" sign --ks "$KS" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KEY_PASS" --ks-key-alias "$KEY_ALIAS" --out "$OUT/birchos-launcher.apk" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$OUT/birchos-launcher.apk"
 echo "Built $OUT/birchos-launcher.apk"

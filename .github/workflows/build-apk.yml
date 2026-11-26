@@ -1,13 +1,16 @@
 name: Build Birch OS APK
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "launcher/**"
       - ".github/workflows/build-apk.yml"
-  workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: birch-build
+  cancel-in-progress: false
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -19,34 +22,49 @@ jobs:
           java-version: "17"
       - uses: android-actions/setup-android@v3
       - name: Android SDK 34
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
-      - name: Restore the Birch signing key
+        run: yes | sdkmanager --licenses >/dev/null || true; sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Check the signing secrets
         env:
-          BIRCH_KEYSTORE_BASE64: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
+          A: ${{ secrets.BIRCH_KEYSTORE_BASE64 }}
+          B: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
+          C: ${{ secrets.BIRCH_KEY_ALIAS }}
+          D: ${{ secrets.BIRCH_KEY_PASSWORD }}
         run: |
-          test -n "$BIRCH_KEYSTORE_BASE64" || (echo "Missing secret BIRCH_KEYSTORE_BASE64" && exit 1)
-          mkdir -p launcher/native-android/keystore
-          printf '%s' "$BIRCH_KEYSTORE_BASE64" | base64 -d > launcher/native-android/keystore/birch-release.jks
-      - name: Build
+          missing=0
+          [ -n "$A" ] || { echo "::error::Missing secret BIRCH_KEYSTORE_BASE64"; missing=1; }
+          [ -n "$B" ] || { echo "::error::Missing secret BIRCH_KEYSTORE_PASSWORD"; missing=1; }
+          [ -n "$C" ] || { echo "::error::Missing secret BIRCH_KEY_ALIAS"; missing=1; }
+          [ -n "$D" ] || { echo "::error::Missing secret BIRCH_KEY_PASSWORD"; missing=1; }
+          exit $missing
+      - name: Build and sign
         env:
           BT: ${{ env.ANDROID_SDK_ROOT }}/build-tools/34.0.0
           PF: ${{ env.ANDROID_SDK_ROOT }}/platforms/android-34
-        run: bash launcher/native-android/build.sh
-      - name: Version code
-        id: ver
-        run: echo "code=$(sed -n 's/.*versionCode="\([0-9]*\)".*/\1/p' launcher/native-android/AndroidManifest.xml)" >> "$GITHUB_OUTPUT"
+          BIRCH_KEYSTORE_PASSWORD: ${{ secrets.BIRCH_KEYSTORE_PASSWORD }}
+          BIRCH_KEY_ALIAS: ${{ secrets.BIRCH_KEY_ALIAS }}
+          BIRCH_KEY_PASSWORD: ${{ secrets.BIRCH_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          # Keep updates newer than the v56 sideload. run_number starts small on a new workflow, so add 56.
+          export VERSION_CODE=$((56 + VERSION_CODE))
+          echo "$VERSION_CODE" > /tmp/version_code.txt
+          mkdir -p "$RUNNER_TEMP"
+          echo "${{ secrets.BIRCH_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/birch.jks"
+          export KS="$RUNNER_TEMP/birch.jks"
+          bash launcher/native-android/build.sh
+          rm -f "$RUNNER_TEMP/birch.jks"
       - name: version.json
         run: |
-          code="${{ steps.ver.outputs.code }}"
+          code=$(cat /tmp/version_code.txt)
           printf '{"versionCode":%s,"versionName":"%s"}\n' "$code" "$code" > version.json
+          echo "code=$code" >> "$GITHUB_ENV"
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.ver.outputs.code }}
-          name: Birch OS ${{ steps.ver.outputs.code }}
+          tag_name: v${{ env.code }}
+          name: Birch OS ${{ env.code }}
           files: |
             /tmp/birch-build/birchos-launcher.apk
             version.json
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -110,6 +110,11 @@ public class MainActivity extends Activity {
   }
 
   class Bridge {
+    int currentVersion() {
+      try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; }
+      catch (Throwable t) { return VERSION; }
+    }
+
     @JavascriptInterface public void setPicture(String js) { Pic.js = js; }
 
     @JavascriptInterface public void setKeepScreenOn(boolean on) {
@@ -136,7 +141,7 @@ public class MainActivity extends Activity {
         byte[] buf = new byte[8192];
         int n;
         while (in != null && (n = in.read(buf)) > 0) bo.write(buf, 0, n);
-        if (code >= 400) return new JSONObject().put("error", "GitHub HTTP " + code).put("current", VERSION).toString();
+        if (code >= 400) return new JSONObject().put("error", "GitHub HTTP " + code).put("current", currentVersion()).toString();
         JSONObject rel = new JSONObject(bo.toString("utf-8"));
         String tag = rel.optString("tag_name", "");
         int remote = VERSION;
@@ -151,9 +156,9 @@ public class MainActivity extends Activity {
             if (name.endsWith(".apk")) { apk = a.optString("browser_download_url", ""); break; }
           }
         }
-        return new JSONObject().put("current", VERSION).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
+        return new JSONObject().put("current", currentVersion()).put("versionCode", remote).put("name", rel.optString("name", tag)).put("url", apk).put("notes", rel.optString("body", "")).toString();
       } catch (Throwable t) {
-        try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", VERSION).toString(); }
+        try { return new JSONObject().put("error", t.getClass().getSimpleName() + ": " + t.getMessage()).put("current", currentVersion()).toString(); }
         catch (Throwable t2) { return "{\"error\":\"check failed\",\"current\":56}"; }
       } finally { if (c != null) c.disconnect(); }
     }
@@ -254,6 +259,6 @@ public class MainActivity extends Activity {
       startActivity(new Intent(MainActivity.this, WebAppActivity.class).putExtra("url", url));
     }
 
-    @JavascriptInterface public String version() { return String.valueOf(VERSION); }
+    @JavascriptInterface public String version() { return String.valueOf(currentVersion()); }
   }
 }
