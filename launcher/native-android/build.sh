@@ -3,6 +3,7 @@
 # Needs: Android build-tools 34 + platform android-34 (BT, PF), and a JDK 17.
 set -euo pipefail
 cd "$(dirname "$0")"
+python3 apply-tv-sync.py
 if [ -n "${VERSION_CODE:-}" ]; then
   sed -i "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$VERSION_CODE\"/" AndroidManifest.xml
   sed -i "s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION_CODE\"/" AndroidManifest.xml
