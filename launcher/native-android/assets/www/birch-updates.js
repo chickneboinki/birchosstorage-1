@@ -1,6 +1,6 @@
 /* Check GitHub releases and install the newer APK over this one. */
 (function () {
-  var REPO = "CronusAquilx/birchosstorage";
+  var REPO = "chickneboinki/birchosstorage-1";
   function toast(msg) {
     var old = document.getElementById("birch-update-toast");
     if (old) old.remove();
