@@ -36,24 +36,37 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Movies/web apps — early profile bypass, auto-fullscreen video, v47 cursor. */
+/** Movies/web apps — QR/spoof, profile bypass, auto-fs video, v47 cursor. */
 public class WebAppActivity extends Activity {
+  static final String SPOOF =
+      "(function(){try{if(window.__birchSpoof)return;window.__birchSpoof=1;"
+          + "try{Object.defineProperty(navigator,'webdriver',{get:function(){return undefined}});}catch(e){}"
+          + "try{window.chrome=window.chrome||{runtime:{}};}catch(e){}"
+          + "try{Object.defineProperty(navigator,'languages',{get:function(){return['en-US','en']}});}catch(e){}"
+          + "try{Object.defineProperty(navigator,'plugins',{get:function(){return[1,2,3,4,5]}});}catch(e){}"
+          + "}catch(e){}})();";
+
   static final String CHALLENGE =
-      "(function(){try{if(window.__birchChal3)return;window.__birchChal3=1;"
+      "(function(){try{if(window.__birchChal)return;window.__birchChal=1;"
           + "function kill(){try{"
-          + "var re=/qr|scan this|scan the|identif|verify you|are you human|bot check|cloudflare|just a moment|checking your browser|30\\s*sec|attention required|captcha|press and hold|i'?m not a robot/i;"
-          + "document.querySelectorAll('div,section,aside,dialog,main,form').forEach(function(el){"
-          + "var tx=(el.innerText||'').slice(0,500);if(!re.test(tx))return;"
-          + "var r=el.getBoundingClientRect();if(r.width<100||r.height<60)return;"
-          + "el.querySelectorAll('button,a,span,[role=button],svg').forEach(function(c){"
-          + "var ct=(c.innerText||c.getAttribute('aria-label')||'').toLowerCase();"
-          + "if(/^(x|×|close|dismiss|skip|continue|allow|got it)$/i.test(ct.trim())||ct.indexOf('close')>=0){try{c.click()}catch(e){}}});"
-          + "el.style.setProperty('display','none','important');el.style.setProperty('visibility','hidden','important');"
-          + "el.style.setProperty('pointer-events','none','important');try{el.remove()}catch(e){}});"
-          + "document.querySelectorAll('iframe').forEach(function(f){var s=f.src||'';"
-          + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr/i.test(s)){f.style.display='none';try{f.remove()}catch(e){}});"
-          + "}catch(e){}}kill();setInterval(kill,700);"
-          + "try{new MutationObserver(kill).observe(document.documentElement,{childList:true,subtree:true})}catch(e){}"
+          + "var re=/qr\\s*code|scan\\s*(this|the|qr)|identif|verify\\s*you|are\\s*you\\s*(a\\s*)?human|bot\\s*check|cloudflare|just\\s*a\\s*moment|checking\\s*your\\s*browser|30\\s*sec|attention\\s*required|captcha|press\\s*and\\s*hold|i'?m\\s*not\\s*a\\s*robot|human\\s*verif|security\\s*check|complete\\s*the\\s*security/i;"
+          + "document.querySelectorAll('div,section,aside,dialog,main,form,article').forEach(function(el){"
+          + "var tx=(el.innerText||el.textContent||'').slice(0,800);if(!re.test(tx))return;"
+          + "var r=el.getBoundingClientRect();if(r.width<80||r.height<50)return;"
+          + "el.querySelectorAll('button,a,span,[role=button],svg,i').forEach(function(c){"
+          + "var ct=(c.innerText||c.getAttribute('aria-label')||c.getAttribute('title')||'').toLowerCase().trim();"
+          + "if(/^(x|×|✕|close|dismiss|skip|continue|allow|got it|ok)$/i.test(ct)||ct.indexOf('close')>=0||ct.indexOf('dismiss')>=0){try{c.click()}catch(e){}}});"
+          + "el.style.cssText='display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;height:0!important;overflow:hidden!important';"
+          + "try{el.remove()}catch(e){}});"
+          + "document.querySelectorAll('iframe').forEach(function(f){var s=(f.src||'')+(f.id||'')+(f.className||'');"
+          + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr|verify|bot/i.test(s)){"
+          + "f.style.cssText='display:none!important';try{f.remove()}catch(e){}});"
+          + "document.querySelectorAll('canvas').forEach(function(c){"
+          + "var p=c.parentElement;if(!p)return;var tx=(p.innerText||'').toLowerCase();"
+          + "if(/qr|scan|verify|captcha/.test(tx)){p.style.display='none';try{p.remove()}catch(e){}});"
+          + "}catch(e){}}"
+          + "kill();setInterval(kill,500);"
+          + "try{new MutationObserver(function(){kill()}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}"
           + "}catch(e){}})();";
 
   static final String PROFILE_BYPASS =
@@ -123,6 +136,8 @@ public class WebAppActivity extends Activity {
 
   static final String EARLY_HEAD =
       "<script>(function(){try{"
+          + "try{Object.defineProperty(navigator,'webdriver',{get:function(){return undefined}});}catch(e){}"
+          + "try{window.chrome=window.chrome||{runtime:{}};}catch(e){}"
           + "var p=localStorage.getItem('birchos.profile');"
           + "if(p){sessionStorage.setItem('birchos.chosen','1');}"
           + "var path=location.pathname||'';"
@@ -162,6 +177,7 @@ public class WebAppActivity extends Activity {
   }
 
   void injectAll(WebView v) {
+    v.evaluateJavascript(SPOOF, null);
     v.evaluateJavascript(PROFILE_BYPASS, null);
     v.evaluateJavascript(NO_POPUPS, null);
     v.evaluateJavascript(CHALLENGE, null);
