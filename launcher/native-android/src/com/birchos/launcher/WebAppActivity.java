@@ -28,12 +28,18 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
-/** Movies/web apps — QR kill, inline video, profile bypass, v47 cursor. */
+/** Movies/web apps — early profile bypass, auto-fullscreen video, v47 cursor. */
 public class WebAppActivity extends Activity {
   static final String CHALLENGE =
-      "(function(){try{if(window.__birchChal2)return;window.__birchChal2=1;"
+      "(function(){try{if(window.__birchChal3)return;window.__birchChal3=1;"
           + "function kill(){try{"
           + "var re=/qr|scan this|scan the|identif|verify you|are you human|bot check|cloudflare|just a moment|checking your browser|30\\s*sec|attention required|captcha|press and hold|i'?m not a robot/i;"
           + "document.querySelectorAll('div,section,aside,dialog,main,form').forEach(function(el){"
@@ -43,18 +49,29 @@ public class WebAppActivity extends Activity {
           + "var ct=(c.innerText||c.getAttribute('aria-label')||'').toLowerCase();"
           + "if(/^(x|×|close|dismiss|skip|continue|allow|got it)$/i.test(ct.trim())||ct.indexOf('close')>=0){try{c.click()}catch(e){}}});"
           + "el.style.setProperty('display','none','important');el.style.setProperty('visibility','hidden','important');"
-          + "el.style.setProperty('pointer-events','none','important');el.style.setProperty('opacity','0','important');"
-          + "try{el.remove()}catch(e){}});"
+          + "el.style.setProperty('pointer-events','none','important');try{el.remove()}catch(e){}});"
           + "document.querySelectorAll('iframe').forEach(function(f){var s=f.src||'';"
           + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr/i.test(s)){f.style.display='none';try{f.remove()}catch(e){}});"
           + "}catch(e){}}kill();setInterval(kill,700);"
           + "try{new MutationObserver(kill).observe(document.documentElement,{childList:true,subtree:true})}catch(e){}"
           + "}catch(e){}})();";
+
   static final String PROFILE_BYPASS =
-      "(function(){try{var p=localStorage.getItem('birchos.profile');"
+      "(function(){try{if(window.__birchProf)return;window.__birchProf=1;"
+          + "function arm(){try{var p=localStorage.getItem('birchos.profile');"
           + "if(p){sessionStorage.setItem('birchos.chosen','1');"
-          + "try{window.dispatchEvent(new Event('birchos-profile'));}catch(e){}}}"
+          + "try{window.dispatchEvent(new Event('birchos-profile'));}catch(e){}}"
+          + "var path=location.pathname||'';"
+          + "if(path!=='/profiles'&&path!=='/auth'){sessionStorage.setItem('birchos.return',location.href);}"
+          + "if(path==='/profiles'&&p){var ret=sessionStorage.getItem('birchos.return');"
+          + "if(ret&&ret.indexOf('/profiles')<0){location.replace(ret);}else{location.replace('/');}}"
+          + "}catch(e){}}"
+          + "arm();setInterval(arm,400);"
+          + "try{var _ps=history.pushState;history.pushState=function(){var r=_ps.apply(this,arguments);arm();return r;};"
+          + "var _rs=history.replaceState;history.replaceState=function(){var r=_rs.apply(this,arguments);arm();return r;};"
+          + "window.addEventListener('popstate',arm);}catch(e){}"
           + "}catch(e){}})();";
+
   static final String HOME_ZOOM =
       "(function(){try{if(window.__birchZoom)return;window.__birchZoom=1;"
           + "function apply(){var h=location.hostname||'',p=location.pathname||'/';"
@@ -63,27 +80,51 @@ public class WebAppActivity extends Activity {
           + "var z=home?'0.82':'1';"
           + "try{document.documentElement.style.zoom=z;}catch(e){}"
           + "try{if(document.body)document.body.style.zoom=z;}catch(e){}}"
-          + "apply();"
-          + "var ps=history.pushState;history.pushState=function(){var r=ps.apply(this,arguments);apply();return r;};"
-          + "var rs=history.replaceState;history.replaceState=function(){var r=rs.apply(this,arguments);apply();return r;};"
-          + "window.addEventListener('popstate',apply);setInterval(apply,2000);}catch(e){}})();";
+          + "apply();setInterval(apply,2000);}catch(e){}})();";
+
   static final String VIDEO_FIX =
-      "(function(){try{if(window.__birchVid)return;window.__birchVid=1;"
+      "(function(){try{if(window.__birchVid2)return;window.__birchVid2=1;"
           + "var st=document.createElement('style');st.id='birch-vid';"
-          + "st.textContent='video,iframe[src*=player],iframe[src*=embed]{opacity:1!important;visibility:visible!important;display:block!important;max-width:100%!important;width:100%!important;max-height:85vh!important;object-fit:contain!important;background:#000!important;z-index:20!important}'"
-          + "+'.plyr,.jwplayer,[class*=player],[class*=Player],[id*=player],[id*=Player]{opacity:1!important;visibility:visible!important;min-height:240px!important;background:#000!important}';"
+          + "st.textContent='html,body{background:#000!important}"
+          + "+\"video{opacity:1!important;visibility:visible!important;display:block!important;\"
+          + "width:100%!important;max-height:100vh!important;min-height:200px!important;\"
+          + "object-fit:contain!important;background:#000!important;z-index:2147483000!important;\"
+          + "position:relative!important;-webkit-transform:translateZ(0)!important;transform:translateZ(0)!important}\"
+          + "video::-webkit-media-controls{opacity:1!important;display:flex!important}"
+          + "+\".plyr,.jwplayer,[class*=player],[class*=Player],[id*=player],[id*=Player],[class*=video],[class*=Video]{\"
+          + "opacity:1!important;visibility:visible!important;min-height:220px!important;background:#000!important;\"
+          + "z-index:20!important}\";"
           + "(document.head||document.documentElement).appendChild(st);"
-          + "function fix(){document.querySelectorAll('video').forEach(function(v){"
+          + "function goFs(v){try{"
+          + "if(v.webkitEnterFullscreen){v.webkitEnterFullscreen();return;}"
+          + "if(v.requestFullscreen){v.requestFullscreen();return;}"
+          + "if(v.webkitRequestFullscreen){v.webkitRequestFullscreen();return;}"
+          + "if(v.mozRequestFullScreen){v.mozRequestFullScreen();return;}"
+          + "}catch(e){}"
+          + "try{document.querySelectorAll('button,[role=button],a').forEach(function(b){"
+          + "var t=((b.getAttribute('aria-label')||'')+' '+(b.title||'')+' '+(b.innerText||'')).toLowerCase();"
+          + "if(/full\\s*screen|fullscreen|expand|maximize/.test(t)){b.click();}"
+          + "});}catch(e){}}"
+          + "function fix(v){if(!v||v.tagName!=='VIDEO')return;"
           + "v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');"
-          + "v.style.opacity='1';v.style.visibility='visible';v.style.display='block';"
-          + "v.style.width='100%';v.style.maxHeight='85vh';v.style.objectFit='contain';"
-          + "var p=v.parentElement;for(var i=0;i<6&&p;i++){"
-          + "var cs=getComputedStyle(p);if(cs.opacity==='0'||cs.visibility==='hidden'){p.style.opacity='1';p.style.visibility='visible'}"
-          + "if(p.offsetHeight<40&&v.videoHeight){p.style.minHeight=Math.min(480,v.videoHeight)+'px'}"
-          + "p=p.parentElement;}});}"
-          + "fix();setInterval(fix,1500);document.addEventListener('play',fix,true);}catch(e){}})();";
+          + "v.removeAttribute('hidden');v.style.opacity='1';v.style.visibility='visible';"
+          + "v.style.display='block';v.style.width='100%';v.style.maxHeight='100vh';"
+          + "v.style.objectFit='contain';v.style.background='#000';"
+          + "var p=v.parentElement;for(var i=0;i<8&&p;i++){"
+          + "try{var cs=getComputedStyle(p);if(cs.opacity==='0'||cs.visibility==='hidden'){p.style.opacity='1';p.style.visibility='visible'}"
+          + "if(cs.display==='none'){p.style.display='block'}"
+          + "if(p.offsetHeight<40){p.style.minHeight='240px'}p.style.overflow='visible';"
+          + "}catch(e){}p=p.parentElement;}}"
+          + "function scan(){document.querySelectorAll('video').forEach(fix);}"
+          + "document.addEventListener('play',function(e){var v=e.target;if(!v||v.tagName!=='VIDEO')return;fix(v);"
+          + "if(!v.__birchFs){v.__birchFs=1;setTimeout(function(){goFs(v);},300);}"
+          + "},true);"
+          + "document.addEventListener('loadeddata',function(e){if(e.target&&e.target.tagName==='VIDEO')fix(e.target);},true);"
+          + "scan();setInterval(scan,1200);}catch(e){}})();";
+
   static final String NO_POPUPS =
       "(function(){try{window.open=function(){return null};document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[target=_blank]');if(a)a.removeAttribute('target');},true);}catch(e){}})();";
+
   static final String WATCH_JS =
       "(function(){try{if(window.__birchWatch)return;window.__birchWatch=1;"
           + "function cleanTitle(){return (document.title||'').replace(/\\s*[|\\-–].*$/,'').trim().slice(0,80);}"
@@ -100,6 +141,14 @@ public class WebAppActivity extends Activity {
           + "document.addEventListener('timeupdate',function(e){if(e.target&&e.target.tagName==='VIDEO')sched();},true);"
           + "setInterval(function(){var v=document.querySelector('video');if(v&&v.currentTime>5)save();},20000);"
           + "window.addEventListener('popstate',sched);var ps=history.pushState;history.pushState=function(){var r=ps.apply(this,arguments);sched();return r;};sched();}catch(e){}})();";
+
+  static final String EARLY_HEAD =
+      "<script>(function(){try{"
+          + "var p=localStorage.getItem('birchos.profile');"
+          + "if(p){sessionStorage.setItem('birchos.chosen','1');}"
+          + "var path=location.pathname||'';"
+          + "if(path!=='/profiles'&&path!=='/auth'){sessionStorage.setItem('birchos.return',location.href);}"
+          + "}catch(e){}})();</script>";
 
   WebView web;
   View fullView, cursor, chooser;
@@ -124,8 +173,55 @@ public class WebAppActivity extends Activity {
     return p.length <= 2 ? host : p[p.length - 2] + "." + p[p.length - 1];
   }
 
+  static boolean isMoviesHost(String host) {
+    if (host == null) return false;
+    return host.contains("birchos-tv") || host.contains("lovable.app");
+  }
+
   void persistCookies() {
     try { CookieManager cm = CookieManager.getInstance(); cm.setAcceptCookie(true); cm.flush(); } catch (Throwable ignored) {}
+  }
+
+  void injectAll(WebView v) {
+    v.evaluateJavascript(PROFILE_BYPASS, null);
+    v.evaluateJavascript(NO_POPUPS, null);
+    v.evaluateJavascript(CHALLENGE, null);
+    v.evaluateJavascript(HOME_ZOOM, null);
+    v.evaluateJavascript(VIDEO_FIX, null);
+  }
+
+  WebResourceResponse injectHtml(String url) {
+    HttpURLConnection c = null;
+    try {
+      c = (HttpURLConnection) new URL(url).openConnection();
+      c.setConnectTimeout(15000);
+      c.setReadTimeout(20000);
+      c.setInstanceFollowRedirects(true);
+      c.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 BirchOSLauncher/1");
+      c.setRequestProperty("Accept", "text/html,application/xhtml+xml");
+      int code = c.getResponseCode();
+      InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+      if (in == null) return null;
+      ByteArrayOutputStream bo = new ByteArrayOutputStream();
+      byte[] buf = new byte[8192];
+      int n;
+      while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+      String html = new String(bo.toByteArray(), StandardCharsets.UTF_8);
+      if (html.toLowerCase().contains("<html")) {
+        if (html.contains("<head>")) html = html.replaceFirst("<head>", "<head>" + EARLY_HEAD);
+        else if (html.contains("<HEAD>")) html = html.replaceFirst("<HEAD>", "<HEAD>" + EARLY_HEAD);
+        else html = EARLY_HEAD + html;
+      }
+      String mime = c.getContentType();
+      if (mime == null || !mime.contains("html")) mime = "text/html";
+      int semi = mime.indexOf(';');
+      if (semi > 0) mime = mime.substring(0, semi).trim();
+      return new WebResourceResponse(mime, "utf-8", new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
+    } catch (Throwable t) {
+      return null;
+    } finally {
+      if (c != null) c.disconnect();
+    }
   }
 
   @Override protected void onCreate(Bundle b) {
@@ -134,8 +230,7 @@ public class WebAppActivity extends Activity {
     root = new FrameLayout(this);
     root.setBackgroundColor(0xFF000000);
     web = new WebView(this);
-    // LAYER_TYPE_NONE helps Fire TV show inline video (not black until fullscreen)
-    web.setLayerType(View.LAYER_TYPE_NONE, null);
+    web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     WebSettings s = web.getSettings();
     s.setJavaScriptEnabled(true);
     s.setDomStorageEnabled(true);
@@ -168,19 +263,9 @@ public class WebAppActivity extends Activity {
         }
         return false;
       }
-      @Override public void onPageStarted(WebView v, String url, Bitmap f) {
-        v.evaluateJavascript(PROFILE_BYPASS, null);
-        v.evaluateJavascript(NO_POPUPS, null);
-        v.evaluateJavascript(CHALLENGE, null);
-        v.evaluateJavascript(HOME_ZOOM, null);
-        v.evaluateJavascript(VIDEO_FIX, null);
-      }
+      @Override public void onPageStarted(WebView v, String url, Bitmap f) { injectAll(v); }
       @Override public void onPageFinished(WebView v, String url) {
-        v.evaluateJavascript(PROFILE_BYPASS, null);
-        v.evaluateJavascript(NO_POPUPS, null);
-        v.evaluateJavascript(CHALLENGE, null);
-        v.evaluateJavascript(HOME_ZOOM, null);
-        v.evaluateJavascript(VIDEO_FIX, null);
+        injectAll(v);
         v.evaluateJavascript(WATCH_JS, null);
         if (Pic.js != null) v.evaluateJavascript(Pic.js, null);
         persistCookies();
@@ -188,6 +273,10 @@ public class WebAppActivity extends Activity {
       @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
         Uri u = r.getUrl();
         if (MainActivity.HOST.equals(u.getHost())) return Assets.open(WebAppActivity.this, u.getPath());
+        if (r.isForMainFrame() && isMoviesHost(u.getHost()) && ("http".equals(u.getScheme()) || "https".equals(u.getScheme()))) {
+          WebResourceResponse injected = injectHtml(u.toString());
+          if (injected != null) return injected;
+        }
         return null;
       }
       @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
