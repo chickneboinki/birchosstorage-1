@@ -18,15 +18,78 @@ if ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
   echo "Fetching WebAppActivity.java from known-good commit e1619523..."
   curl -fsSL "https://raw.githubusercontent.com/chickneboinki/birchosstorage-1/e1619523/launcher/native-android/src/com/birchos/launcher/WebAppActivity.java" -o "$WA"
 fi
-if [ -f patch_v84.py ]; then
-  python3 patch_v84.py "$WA"
-elif [ -f patch_v84.py.part1 ]; then
-  cat patch_v84.py.part1 patch_v84.py.part2 > patch_v84.py
-  python3 patch_v84.py "$WA"
-elif [ -f patch_v84.py.b64.1 ]; then
-  cat patch_v84.py.b64.1 patch_v84.py.b64.2 | base64 -d > patch_v84.py
-  python3 patch_v84.py "$WA"
-fi
+python3 - "$WA" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+# edge scroll clamp
+o = "      if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));\n      if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));"
+n = """      if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {
+        int amount = (int) (vy * dt * 2f);
+        if (amount != 0) {
+          web.evaluateJavascript(
+              \"(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;\"
+                  + \"var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));\"
+                  + \"var cur=(se.scrollTop||window.pageYOffset||0);\"
+                  + \"var t=Math.max(0,Math.min(max,cur+(\" + amount + \")));\"
+                  + \"if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}\"
+                  + \"}catch(e){}})();\",
+              null);
+          int y = web.getScrollY();
+          if (amount < 0) { if (y > 0) web.scrollBy(0, Math.max(amount, -y)); }
+          else { web.scrollBy(0, amount); }
+          if (web.getScrollY() < 0) web.scrollTo(0, 0);
+        }
+      }"""
+if o in s:
+    s = s.replace(o, n)
+    print("edge clamp ok")
+s = s.replace("window.__birchVid5", "window.__birchVid7")
+s = s.replace("transform:none!important}", "}")
+# Prefer compensate over forceTop on FS paths
+for a,b in [
+    ("function clickFs(){forceTop();injectFsCss();", "function clickFs(){injectFsCss();"),
+    ("forceTop();keepVisible(v);injectFsCss();", "keepVisible(v);injectFsCss();"),
+    ("setTimeout(forceTop,50);setTimeout(forceTop,300)", "setTimeout(function(){},50)"),
+]:
+    s = s.replace(a, b)
+# Native FS: keep scroll, translate custom view by -scrollY
+old = """        try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
+        try { web.evaluateJavascript(\"try{window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body&&(document.body.scrollTop=0);}catch(e){}\", null); } catch (Throwable ignored) {}
+        savedY = 0;
+        fullView = v; fullCb = cb;
+        v.setBackgroundColor(0xFF000000);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        try { v.setLayoutParams(lp); } catch (Throwable ignored) {}
+        fsLayer.removeAllViews();
+        fsLayer.addView(v, lp);"""
+new = """        savedY = 0;
+        try { savedY = web.getScrollY(); } catch (Throwable ignored) {}
+        fullView = v; fullCb = cb;
+        v.setBackgroundColor(0xFF000000);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        try { v.setLayoutParams(lp); } catch (Throwable ignored) {}
+        try { v.setTranslationY(-savedY); } catch (Throwable ignored) {}
+        fsLayer.removeAllViews();
+        fsLayer.addView(v, lp);
+        web.evaluateJavascript(
+            \"(function(){try{var y=window.pageYOffset||document.documentElement.scrollTop||0;var t='translateY('+(-y)+'px)';\"
+                + \"document.querySelectorAll('video').forEach(function(vid){vid.style.setProperty('transform',t,'important');\"
+                + \"vid.style.setProperty('-webkit-transform',t,'important');});}catch(e){}})();\",
+            null);"""
+if old in s:
+    s = s.replace(old, new)
+    print("native compensate ok")
+else:
+    print("native compensate pattern missing")
+# Stop forcing scroll to 0 on hide / post FS
+s = s.replace("try { web.scrollTo(0, 0); } catch (Throwable ignored) {}\n        hideBars(root);", "try { if (savedY > 0) web.scrollTo(0, savedY); } catch (Throwable ignored) {}\n        hideBars(root);")
+p.write_text(s)
+print("patched", len(s))
+PY
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unaligned.apk"
