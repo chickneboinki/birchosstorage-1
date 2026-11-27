@@ -20,6 +20,9 @@ if ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
 fi
 if [ -f patch_v84.py ]; then
   python3 patch_v84.py "$WA"
+elif [ -f patch_v84.py.part1 ]; then
+  cat patch_v84.py.part1 patch_v84.py.part2 > patch_v84.py
+  python3 patch_v84.py "$WA"
 elif [ -f patch_v84.py.b64.1 ]; then
   cat patch_v84.py.b64.1 patch_v84.py.b64.2 | base64 -d > patch_v84.py
   python3 patch_v84.py "$WA"
