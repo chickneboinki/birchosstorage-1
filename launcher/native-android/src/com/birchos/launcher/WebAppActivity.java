@@ -36,7 +36,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Movies/web apps — QR/spoof, profile bypass, in-player auto-FS, v47 cursor. */
+/** Movies/web apps — hard QR kill, profile bypass, in-player auto-FS, v47 cursor. */
 public class WebAppActivity extends Activity {
   static final String SPOOF =
       "(function(){try{if(window.__birchSpoof)return;window.__birchSpoof=1;"
@@ -47,25 +47,38 @@ public class WebAppActivity extends Activity {
           + "}catch(e){}})();";
 
   static final String CHALLENGE =
-      "(function(){try{if(window.__birchChal)return;window.__birchChal=1;"
+      "(function(){try{if(window.__birchChal4)return;window.__birchChal4=1;"
+          + "var st=document.createElement('style');st.id='birch-chal-css';"
+          + "st.textContent='#cf-wrapper,.cf-browser-verification,.cf-challenge,iframe[src*=captcha],iframe[src*=turnstile],iframe[src*=hcaptcha],iframe[src*=recaptcha],iframe[src*=cf-chl],[class*=captcha],[id*=captcha],[class*=challenge-platform]{display:none!important;visibility:hidden!important;pointer-events:none!important;height:0!important;width:0!important}';"
+          + "(document.documentElement||document.head).appendChild(st);"
+          + "function isChalText(tx){return /qr\\s*code|scan\\s*(this|the|qr|code)|identif(y|ication)|verify\\s*(you|human)|are\\s*you\\s*(a\\s*)?(robot|human)|bot\\s*check|cloudflare|just\\s*a\\s*moment|checking\\s*your\\s*browser|30\\s*sec|attention\\s*required|captcha|press\\s*and\\s*hold|i'?m\\s*not\\s*a\\s*robot|human\\s*verif|security\\s*check|complete\\s*the\\s*security|please\\s*verify|one\\s*more\\s*step|access\\s*denied|ray\\s*id/i.test(tx||'');}"
+          + "function nuke(el){if(!el||el===document.body||el===document.documentElement)return;"
+          + "try{el.style.cssText='display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;position:fixed!important;left:-9999px!important;height:0!important;width:0!important;overflow:hidden!important;z-index:-1!important';}catch(e){}"
+          + "try{el.remove()}catch(e){}}"
+          + "function clickClose(root){try{(root||document).querySelectorAll('button,a,span,[role=button],svg,i,div').forEach(function(c){"
+          + "var ct=(c.innerText||c.getAttribute('aria-label')||c.getAttribute('title')||c.className||'').toLowerCase().trim();"
+          + "if(/^(x|×|✕|✖|close|dismiss|skip|continue|allow|got it|ok|cancel)$/i.test(ct)||/close|dismiss|skip/.test(ct)){"
+          + "try{c.click()}catch(e){}}});}catch(e){}}"
           + "function kill(){try{"
-          + "var re=/qr\\s*code|scan\\s*(this|the|qr)|identif|verify\\s*you|are\\s*you\\s*(a\\s*)?human|bot\\s*check|cloudflare|just\\s*a\\s*moment|checking\\s*your\\s*browser|30\\s*sec|attention\\s*required|captcha|press\\s*and\\s*hold|i'?m\\s*not\\s*a\\s*robot|human\\s*verif|security\\s*check|complete\\s*the\\s*security/i;"
           + "document.querySelectorAll('div,section,aside,dialog,main,form,article').forEach(function(el){"
-          + "var tx=(el.innerText||el.textContent||'').slice(0,800);if(!re.test(tx))return;"
-          + "var r=el.getBoundingClientRect();if(r.width<80||r.height<50)return;"
-          + "el.querySelectorAll('button,a,span,[role=button],svg,i').forEach(function(c){"
-          + "var ct=(c.innerText||c.getAttribute('aria-label')||c.getAttribute('title')||'').toLowerCase().trim();"
-          + "if(/^(x|×|✕|close|dismiss|skip|continue|allow|got it|ok)$/i.test(ct)||ct.indexOf('close')>=0||ct.indexOf('dismiss')>=0){try{c.click()}catch(e){}}});"
-          + "el.style.cssText='display:none!important;visibility:hidden!important;opacity:0!important;pointer-events:none!important;height:0!important;overflow:hidden!important';"
-          + "try{el.remove()}catch(e){}});"
-          + "document.querySelectorAll('iframe').forEach(function(f){var s=(f.src||'')+(f.id||'')+(f.className||'');"
-          + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr|verify|bot/i.test(s)){"
-          + "f.style.cssText='display:none!important';try{f.remove()}catch(e){}});"
+          + "var tx=(el.innerText||el.textContent||'').slice(0,1200);if(!isChalText(tx))return;"
+          + "var r=el.getBoundingClientRect();if(r.width<60||r.height<40)return;"
+          + "clickClose(el);nuke(el);});"
+          + "document.querySelectorAll('iframe').forEach(function(f){"
+          + "var s=((f.src||'')+' '+(f.id||'')+' '+(f.className||'')+' '+(f.name||'')).toLowerCase();"
+          + "if(/captcha|challenge|turnstile|hcaptcha|recaptcha|cf-chl|qr|verify|bot|fingerprint|datadome|perimeterx|arkoselabs|funcaptcha/.test(s)){nuke(f);return;}"
+          + "try{var doc=f.contentDocument;if(doc){var t=(doc.body&&doc.body.innerText||'').slice(0,800);if(isChalText(t)){clickClose(doc);nuke(f);}}}catch(e){}"
+          + "});"
           + "document.querySelectorAll('canvas').forEach(function(c){"
-          + "var p=c.parentElement;if(!p)return;var tx=(p.innerText||'').toLowerCase();"
-          + "if(/qr|scan|verify|captcha/.test(tx)){p.style.display='none';try{p.remove()}catch(e){}});"
+          + "var p=c.parentElement;for(var i=0;i<5&&p;i++){var tx=(p.innerText||'').toLowerCase();"
+          + "if(/qr|scan|verify|captcha|robot|human/.test(tx)){nuke(p);break;}p=p.parentElement;}});"
+          + "document.querySelectorAll('*').forEach(function(el){"
+          + "try{var cs=getComputedStyle(el);if(cs.position!=='fixed'&&cs.position!=='absolute')return;"
+          + "var zi=parseInt(cs.zIndex)||0;if(zi<50)return;"
+          + "var r=el.getBoundingClientRect();if(r.width<200||r.height<150)return;"
+          + "var tx=(el.innerText||'').slice(0,800);if(isChalText(tx)||el.querySelector('canvas')){clickClose(el);nuke(el);}}catch(e){}});"
           + "}catch(e){}}"
-          + "kill();setInterval(kill,500);"
+          + "kill();setInterval(kill,400);"
           + "try{new MutationObserver(function(){kill()}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}"
           + "}catch(e){}})();";
 
@@ -291,6 +304,16 @@ public class WebAppActivity extends Activity {
       }
       @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
         Uri u = r.getUrl();
+        String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
+        String path = (u.getPath() == null ? "" : u.getPath()) + "?" + (u.getQuery() == null ? "" : u.getQuery());
+        if (host.contains("hcaptcha") || host.contains("recaptcha")
+            || (host.contains("google.com") && path.contains("recaptcha"))
+            || host.contains("challenges.cloudflare") || host.contains("turnstile")
+            || host.contains("captcha") || host.contains("funcaptcha") || host.contains("arkoselabs")
+            || host.contains("datadome") || host.contains("perimeterx") || host.contains("px-cdn")
+            || host.contains("fingerprint") || path.contains("cf-chl") || path.contains("/cdn-cgi/challenge")) {
+          return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
+        }
         if (MainActivity.HOST.equals(u.getHost())) return Assets.open(WebAppActivity.this, u.getPath());
         if (r.isForMainFrame() && isMoviesHost(u.getHost()) && ("http".equals(u.getScheme()) || "https".equals(u.getScheme()))) {
           WebResourceResponse injected = injectHtml(u.toString());
