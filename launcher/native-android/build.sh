@@ -24,7 +24,7 @@ import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 
-# v83 edge-scroll clamp (keep)
+# edge-scroll clamp
 o = (
     "      if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));\n"
     "      if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));"
@@ -51,8 +51,6 @@ n = (
 if o in s:
     s = s.replace(o, n)
     print("edge clamp ok")
-else:
-    print("edge clamp skip")
 
 if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
     s = s.replace(
@@ -60,13 +58,37 @@ if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
         "web.setBackgroundColor(0xFF000000);\n    web.setOverScrollMode(View.OVER_SCROLL_NEVER);",
     )
 
-# Marker
-s = s.replace("window.__birchVid5", "window.__birchVid8")
-s = s.replace("window.__birchVid6", "window.__birchVid8")
-s = s.replace("window.__birchVid7", "window.__birchVid8")
+for m in ("__birchVid5","__birchVid6","__birchVid7","__birchVid8"):
+    s = s.replace("window."+m, "window.__birchVid9")
 
-# JS: before FS save scroll + forceTop; on exit restore (no transform)
-# Inject restore helper after forceTop
+# Stronger FS CSS + pin helpers (SurfaceView follows video layout box on AWV)
+old_css = (
+    "st.textContent='html:fullscreen,html:-webkit-full-screen,body:fullscreen,body:-webkit-full-screen{background:#000!important;overflow:hidden!important}"\n"
+    "          + "*:fullscreen,*:fullscreen *,*:-webkit-full-screen,*:-webkit-full-screen *{max-width:none!important;max-height:none!important}"\n"
+    "          + "video:fullscreen,video:-webkit-full-screen,:fullscreen video,:-webkit-full-screen video{"\n"
+    "          + "position:fixed!important;inset:0!important;top:0!important;left:0!important;right:0!important;bottom:0!important;"\n"
+    "          + "width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;"\n"
+    "          + "object-fit:contain!important;background:#000!important;z-index:2147483647!important;transform:none!important}"\n"
+    "          + "video{object-fit:contain!important}';"
+)
+new_css = (
+    "st.textContent='html,body{background:#000!important}"\n"
+    "          + "html:fullscreen,html:-webkit-full-screen,body:fullscreen,body:-webkit-full-screen{background:#000!important;overflow:hidden!important;margin:0!important;padding:0!important}"\n"
+    "          + "*:fullscreen,*:fullscreen *,*:-webkit-full-screen,*:-webkit-full-screen *{max-width:none!important;max-height:none!important}"\n"
+    "          + "video.birch-pin,video:fullscreen,video:-webkit-full-screen,:fullscreen video,:-webkit-full-screen video{"\n"
+    "          + "position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;inset:0!important;"\n"
+    "          + "width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;"\n"
+    "          + "margin:0!important;padding:0!important;object-fit:contain!important;object-position:center center!important;"\n"
+    "          + "background:#000!important;z-index:2147483647!important}"\n"
+    "          + "video{object-fit:contain!important;object-position:center center!important}';"
+)
+if old_css in s:
+    s = s.replace(old_css, new_css)
+    print("fs css ok")
+else:
+    print("fs css pattern missing")
+
+# After forceTop, add pinVideo/unpinVideo
 old_ft = (
     '+ "function forceTop(){try{window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body&&(document.body.scrollTop=0);"\n'
     '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=0;}catch(e){}"'
@@ -76,35 +98,67 @@ new_ft = (
     '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=0;}catch(e){}"\n'
     '          + "function saveScroll(){try{window.__birchSavedY=window.pageYOffset||document.documentElement.scrollTop||0;}catch(e){window.__birchSavedY=0;}}"\n'
     '          + "function restoreScroll(){try{var y=window.__birchSavedY||0;if(y>0){window.scrollTo(0,y);"\n'
-    '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}}"'
+    '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}}"\n'
+    '          + "function pinVideo(v){try{forceTop();injectFsCss();"\n'
+    '          + "var list=v?[v]:[].slice.call(document.querySelectorAll(\'video\'));"\n'
+    '          + "list.forEach(function(vid){if(!vid)return;vid.classList.add(\'birch-pin\');"\n'
+    '          + "vid.style.setProperty(\'position\',\'fixed\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'top\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'left\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'right\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'bottom\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'width\',\'100vw\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'height\',\'100vh\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'max-width\',\'none\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'max-height\',\'none\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'margin\',\'0\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'object-fit\',\'contain\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'object-position\',\'center center\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'z-index\',\'2147483647\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'background\',\'#000\',\'important\');});"\n'
+    '          + "forceTop();}catch(e){}}"\n'
+    '          + "function unpinVideo(){try{document.querySelectorAll(\'video.birch-pin\').forEach(function(vid){"\n'
+    '          + "vid.classList.remove(\'birch-pin\');"\n'
+    '          + "[\'position\',\'top\',\'left\',\'right\',\'bottom\',\'width\',\'height\',\'max-width\',\'max-height\',\'margin\',\'z-index\',\'background\'].forEach(function(p){"\n'
+    '          + "try{vid.style.removeProperty(p);}catch(e){}});});restoreScroll();}catch(e){}}"'
 )
 if old_ft in s:
     s = s.replace(old_ft, new_ft)
-    print("save/restore helpers ok")
+    print("pin helpers ok")
+else:
+    print("forceTop block missing")
 
-# clickFs: save then forceTop (temporary pin for SurfaceView)
+# Wire pin into FS paths
 s = s.replace(
     'function clickFs(){forceTop();injectFsCss();"',
-    'function clickFs(){saveScroll();forceTop();injectFsCss();"',
+    'function clickFs(){saveScroll();pinVideo();injectFsCss();"',
 )
-
-# goFs: save+forceTop before native/click
 s = s.replace(
     'if(document.fullscreenElement||document.webkitFullscreenElement){forceTop();return;}"\n          + "forceTop();keepVisible(v);injectFsCss();"',
-    'if(document.fullscreenElement||document.webkitFullscreenElement){forceTop();return;}"\n          + "saveScroll();forceTop();keepVisible(v);injectFsCss();"',
+    'if(document.fullscreenElement||document.webkitFullscreenElement){pinVideo(v);return;}"\n          + "saveScroll();pinVideo(v);keepVisible(v);injectFsCss();"',
 )
-
-# fullscreenchange: restore when leaving FS
+s = s.replace(
+    'if(clickFs()){setTimeout(forceTop,50);setTimeout(forceTop,300);return;}"\n          + "tryNative(v);setTimeout(forceTop,50);setTimeout(forceTop,300);"',
+    'if(clickFs()){setTimeout(function(){pinVideo(v);},50);setTimeout(function(){pinVideo(v);},300);return;}"\n          + "tryNative(v);setTimeout(function(){pinVideo(v);},50);setTimeout(function(){pinVideo(v);},300);"',
+)
+s = s.replace(
+    'setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){forceTop();clickFs();}},400);"',
+    'setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){clickFs();pinVideo(v);}},400);"',
+)
+s = s.replace(
+    'setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){forceTop();clickFs();}},1200);}"',
+    'setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){clickFs();pinVideo(v);}},1200);}"',
+)
 s = s.replace(
     "document.addEventListener('fullscreenchange',function(){forceTop();injectFsCss();},true);\"",
-    "document.addEventListener('fullscreenchange',function(){injectFsCss();if(document.fullscreenElement){saveScroll();forceTop();}else restoreScroll();},true);\"",
+    "document.addEventListener('fullscreenchange',function(){injectFsCss();if(document.fullscreenElement)pinVideo();else unpinVideo();},true);\"",
 )
 s = s.replace(
     "document.addEventListener('webkitfullscreenchange',function(){forceTop();injectFsCss();},true);\"",
-    "document.addEventListener('webkitfullscreenchange',function(){injectFsCss();if(document.webkitFullscreenElement){saveScroll();forceTop();}else restoreScroll();},true);\"",
+    "document.addEventListener('webkitfullscreenchange',function(){injectFsCss();if(document.webkitFullscreenElement)pinVideo();else unpinVideo();},true);\"",
 )
 
-# Native onShowCustomView: save scroll, pin to 0, NO translationY
+# Native custom view: pin scroll 0, restore on hide, no translation
 old_show = '''      @Override public void onShowCustomView(View v, CustomViewCallback cb) {
         if (fullView != null) { cb.onCustomViewHidden(); return; }
         try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
@@ -138,15 +192,14 @@ old_show = '''      @Override public void onShowCustomView(View v, CustomViewCal
 
 new_show = '''      @Override public void onShowCustomView(View v, CustomViewCallback cb) {
         if (fullView != null) { cb.onCustomViewHidden(); return; }
-        // v85: save scroll, pin to 0 for SurfaceView, restore on hide (no CSS transform)
         savedY = 0;
         try { savedY = web.getScrollY(); } catch (Throwable ignored) {}
         try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
         try {
           web.evaluateJavascript(
               "(function(){try{window.__birchSavedY=window.pageYOffset||document.documentElement.scrollTop||0;"
-                  + "window.scrollTo(0,0);document.documentElement.scrollTop=0;"
-                  + "if(document.body)document.body.scrollTop=0;"
+                  + "window.scrollTo(0,0);if(window.pinVideo)pinVideo();"
+                  + "document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;"
                   + "if(document.scrollingElement)document.scrollingElement.scrollTop=0;}catch(e){}})();",
               null);
         } catch (Throwable ignored) {}
@@ -167,9 +220,7 @@ new_show = '''      @Override public void onShowCustomView(View v, CustomViewCal
         hideBars(fsLayer);
         hideBars(v);
         v.requestFocus();
-        web.post(() -> {
-          try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
-        });
+        web.post(() -> { try { web.scrollTo(0, 0); } catch (Throwable ignored) {} });
         web.postDelayed(() -> {
           try {
             if (fullView != null) {
@@ -183,9 +234,9 @@ new_show = '''      @Override public void onShowCustomView(View v, CustomViewCal
 
 if old_show in s:
     s = s.replace(old_show, new_show)
-    print("onShowCustomView v85 ok")
+    print("onShow ok")
 else:
-    print("onShowCustomView pattern missing")
+    print("onShow missing")
 
 old_hide = '''      @Override public void onHideCustomView() {
         if (fullView != null) {
@@ -211,13 +262,12 @@ new_hide = '''      @Override public void onHideCustomView() {
         fullView = null; fullCb = null;
         web.setVisibility(View.VISIBLE);
         web.requestFocus();
-        // v85: restore scroll position from before fullscreen
         final int y = savedY;
         try { if (y > 0) web.scrollTo(0, y); } catch (Throwable ignored) {}
         try {
           web.evaluateJavascript(
-              "(function(){try{var y=window.__birchSavedY||0;if(y>0){window.scrollTo(0,y);"
-                  + "if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}})();",
+              "(function(){try{if(window.unpinVideo)unpinVideo();var y=window.__birchSavedY||0;"
+                  + "if(y>0){window.scrollTo(0,y);if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}})();",
               null);
         } catch (Throwable ignored) {}
         hideBars(root);
@@ -226,12 +276,12 @@ new_hide = '''      @Override public void onHideCustomView() {
 
 if old_hide in s:
     s = s.replace(old_hide, new_hide)
-    print("onHideCustomView v85 ok")
+    print("onHide ok")
 else:
-    print("onHideCustomView pattern missing")
+    print("onHide missing")
 
 p.write_text(s)
-print("patched size", len(s))
+print("done", len(s))
 PY
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
