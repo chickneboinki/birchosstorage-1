@@ -36,7 +36,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Movies/web apps — hard QR kill, profile bypass, in-player auto-FS, v47 cursor. Video cut-off fix v80. */
+/** Movies/web apps — hard QR kill, profile bypass, in-player auto-FS, v47 cursor. Video cut-off fix v80. Cursor physics v81. */
 public class WebAppActivity extends Activity {
   static final String SPOOF =
       "(function(){try{if(window.__birchSpoof)return;window.__birchSpoof=1;"
@@ -120,7 +120,7 @@ public class WebAppActivity extends Activity {
           + "function looksFs(el){"
           + "var t=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.getAttribute('data-tooltip')||'')+' '+(el.className||'')+' '+(el.id||'')+' '+(el.innerText||'')).toLowerCase();"
           + "if(/full\\s*screen|fullscreen|exit\\s*full|maximize|expand/.test(t))return true;"
-          + "if(/\\b(fs|fullscreen|full-screen|vjs-fullscreen|plyr__control--fullscreen|jw-icon-fullscreen|ytp-fullscreen)\\b/.test(t))return true;"
+          + "if(/\\b(fs|fullscreen|full-screen|vjs-fullscreen||plyr__control--fullscreen|jw-icon-fullscreen|ytp-fullscreen)\\b/.test(t))return true;"
           + "return false;}"
           + "function clickFs(){"
           + "forceTop();"
@@ -414,30 +414,60 @@ public class WebAppActivity extends Activity {
   }
 
   void placeCursor() { cursor.setTranslationX(cx - 17f); cursor.setTranslationY(cy - 17f); }
-  void kick() { if (looping) return; looping = true; lastFrame = 0; Choreographer.getInstance().postFrameCallback(frame); }
-  void stopLoop() { looping = false; hl = hr = hu = hd = false; vx = vy = 0; }
+  void kick() {
+    if (looping) return;
+    looping = true;
+    lastFrame = 0L;
+    Choreographer.getInstance().postFrameCallback(frame);
+  }
+  void stopLoop() {
+    looping = false;
+    hd = hu = hr = hl = false;
+    vy = vx = 0f;
+  }
   void tap() {
     long now = SystemClock.uptimeMillis();
     MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, cx, cy, 0);
-    down.setSource(8194);
-    web.dispatchTouchEvent(down); down.recycle();
-    MotionEvent up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, cx, cy, 0);
-    up.setSource(8194);
-    web.dispatchTouchEvent(up); up.recycle();
+    MotionEvent up = MotionEvent.obtain(now, now + 60, MotionEvent.ACTION_UP, cx, cy, 0);
+    down.setSource(4098);
+    up.setSource(4098);
+    web.dispatchTouchEvent(down);
+    web.dispatchTouchEvent(up);
+    down.recycle();
+    up.recycle();
   }
 
+  // v79 cursor physics: dt in seconds, accel 2600, friction 14, min 260, max 1500
   Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
     @Override public void doFrame(long frameTimeNanos) {
-      if (!looping) return;
-      long now = SystemClock.uptimeMillis();
-      float dt = lastFrame == 0 ? 16f : Math.min(40f, now - lastFrame);
-      lastFrame = now;
-      float ax = 0, ay = 0;
-      if (hl) ax -= 1; if (hr) ax += 1; if (hu) ay -= 1; if (hd) ay += 1;
-      vx = vx * 0.85f + ax * 18f; vy = vy * 0.85f + ay * 18f;
+      if (!looping || !cursorMode) {
+        looping = false;
+        return;
+      }
+      float dt = lastFrame == 0 ? 0.016f : Math.min(0.05f, (frameTimeNanos - lastFrame) / 1.0e9f);
+      lastFrame = frameTimeNanos;
+      int ax = (hr ? 1 : 0) - (hl ? 1 : 0);
+      int ay = (hd ? 1 : 0) - (hu ? 1 : 0);
+      if (ax == 0) {
+        vx -= vx * Math.min(1f, dt * 14f);
+      } else {
+        float f = ax;
+        vx += f * 2600f * dt;
+        if (vx * f < 260f) vx = f * 260f;
+      }
+      if (ay == 0) {
+        vy -= vy * Math.min(1f, dt * 14f);
+      } else {
+        float f2 = ay;
+        vy += 2600f * f2 * dt;
+        if (vy * f2 < 260f) vy = f2 * 260f;
+      }
+      vx = Math.max(-1500f, Math.min(1500f, vx));
+      vy = Math.max(-1500f, Math.min(1500f, vy));
       float w = Math.max(1, root.getWidth());
       float h = Math.max(1, root.getHeight());
-      cx += vx * dt; cy += vy * dt;
+      cx += vx * dt;
+      cy += vy * dt;
       if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));
       if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));
       cx = Math.max(0f, Math.min(w - 1f, cx));
@@ -445,11 +475,15 @@ public class WebAppActivity extends Activity {
       placeCursor();
       long t = SystemClock.uptimeMillis();
       MotionEvent hover = MotionEvent.obtain(t, t, MotionEvent.ACTION_HOVER_MOVE, cx, cy, 0);
-      hover.setSource(8194);
+      hover.setSource(4098);
       web.dispatchGenericMotionEvent(hover);
       hover.recycle();
-      if (ax != 0 || ay != 0 || Math.abs(vx) > 5f || Math.abs(vy) > 5f) Choreographer.getInstance().postFrameCallback(this);
-      else { looping = false; lastFrame = 0; }
+      if (ax != 0 || ay != 0 || Math.abs(vx) > 5f || Math.abs(vy) > 5f) {
+        Choreographer.getInstance().postFrameCallback(this);
+      } else {
+        looping = false;
+        lastFrame = 0L;
+      }
     }
   };
 
