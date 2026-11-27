@@ -60,7 +60,7 @@ public class WebAppActivity extends Activity {
           + "if(/^(x|×|✕|✖|close|dismiss|skip|continue|allow|got it|ok|cancel)$/i.test(ct)||/close|dismiss|skip/.test(ct)){"
           + "try{c.click()}catch(e){}}});}catch(e){}}"
           + "function kill(){try{"
-          + "document.querySelectorAll('div,section,aside,dialog,main,form,article').forEach(function(el){"
+          + "document.querySelectorAll('body > *,body > * > *,[role=dialog],dialog,[class*=modal],[class*=Modal],[class*=overlay],[class*=Overlay],[class*=popup],[class*=captcha],[class*=challenge],[class*=verify],[id*=captcha],[id*=challenge],[id*=verify]').forEach(function(el){"
           + "var tx=(el.innerText||el.textContent||'').slice(0,1200);if(!isChalText(tx))return;"
           + "var r=el.getBoundingClientRect();if(r.width<60||r.height<40)return;"
           + "clickClose(el);nuke(el);});"
@@ -72,14 +72,14 @@ public class WebAppActivity extends Activity {
           + "document.querySelectorAll('canvas').forEach(function(c){"
           + "var p=c.parentElement;for(var i=0;i<5&&p;i++){var tx=(p.innerText||'').toLowerCase();"
           + "if(/qr|scan|verify|captcha|robot|human/.test(tx)){nuke(p);break;}p=p.parentElement;}});"
-          + "document.querySelectorAll('*').forEach(function(el){"
+          + "document.querySelectorAll('body > *,body > * > *,[role=dialog],dialog,[class*=modal],[class*=Modal],[class*=overlay],[class*=Overlay],[class*=popup],[class*=captcha],[class*=challenge],[class*=verify],[id*=captcha],[id*=challenge],[id*=verify]').forEach(function(el){"
           + "try{var cs=getComputedStyle(el);if(cs.position!=='fixed'&&cs.position!=='absolute')return;"
           + "var zi=parseInt(cs.zIndex)||0;if(zi<50)return;"
           + "var r=el.getBoundingClientRect();if(r.width<200||r.height<150)return;"
           + "var tx=(el.innerText||'').slice(0,800);if(isChalText(tx)||el.querySelector('canvas')){clickClose(el);nuke(el);}}catch(e){}});"
           + "}catch(e){}}"
-          + "kill();setInterval(kill,400);"
-          + "try{new MutationObserver(function(){kill()}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}"
+          + "kill();setInterval(kill,3000);"
+          + "try{var kt=0;new MutationObserver(function(){if(kt)return;kt=setTimeout(function(){kt=0;kill();},1500);}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}"
           + "}catch(e){}})();";
 
   static final String PROFILE_BYPASS =
@@ -92,21 +92,11 @@ public class WebAppActivity extends Activity {
           + "if(path==='/profiles'&&p){var ret=sessionStorage.getItem('birchos.return');"
           + "if(ret&&ret.indexOf('/profiles')<0){location.replace(ret);}else{location.replace('/');}}"
           + "}catch(e){}}"
-          + "arm();setInterval(arm,400);"
+          + "arm();setInterval(arm,1000);"
           + "try{var _ps=history.pushState;history.pushState=function(){var r=_ps.apply(this,arguments);arm();return r;};"
           + "var _rs=history.replaceState;history.replaceState=function(){var r=_rs.apply(this,arguments);arm();return r;};"
           + "window.addEventListener('popstate',arm);}catch(e){}"
           + "}catch(e){}})();";
-
-  static final String HOME_ZOOM =
-      "(function(){try{if(window.__birchZoom)return;window.__birchZoom=1;"
-          + "function apply(){var h=location.hostname||'',p=location.pathname||'/';"
-          + "if(h.indexOf('birchos-tv')<0&&h.indexOf('lovable.app')<0)return;"
-          + "var home=p==='/'||p===''||p==='/index.html'||p==='/home';"
-          + "var z=home?'0.82':'1';"
-          + "try{document.documentElement.style.zoom=z;}catch(e){}"
-          + "try{if(document.body)document.body.style.zoom=z;}catch(e){}}"
-          + "apply();setInterval(apply,2000);}catch(e){}})();";
 
   static final String VIDEO_FIX =
       "(function(){try{if(window.__birchVid9)return;window.__birchVid9=1;"
@@ -397,7 +387,6 @@ public class WebAppActivity extends Activity {
     v.evaluateJavascript(PROFILE_BYPASS, null);
     v.evaluateJavascript(NO_POPUPS, null);
     v.evaluateJavascript(CHALLENGE, null);
-    v.evaluateJavascript(HOME_ZOOM, null);
     v.evaluateJavascript(VIDEO_FIX, null);
   }
 
@@ -544,9 +533,6 @@ public class WebAppActivity extends Activity {
         fsLayer.postDelayed(() -> fitFs(), 50);
         fsLayer.postDelayed(() -> fitFs(), 300);
         fsLayer.postDelayed(() -> fitFs(), 900);
-        fsLayer.postDelayed(() -> showDbg(), 500);
-        fsLayer.postDelayed(() -> showDbg(), 1500);
-        fsLayer.postDelayed(() -> showDbg(), 4000);
       }
       @Override public boolean onCreateWindow(WebView v, boolean d, boolean g, android.os.Message m) { return false; }
       @Override public void onHideCustomView() {

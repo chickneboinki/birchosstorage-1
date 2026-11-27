@@ -579,7 +579,7 @@
     if (t === 'square') o.push('#root [data-app]{border-radius:8px!important}');
     else if (t === 'pill') o.push('#root [data-app]{border-radius:999px!important}');
     else if (t === 'outline') o.push('#root [data-app]{background:transparent!important;box-shadow:inset 0 0 0 2px rgba(255,255,255,.55)!important}');
-    else if (t === 'glass') o.push('#root [data-app]{background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.06))!important;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5)!important}');
+    else if (t === 'glass') o.push('#root [data-app]{background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.06))!important;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 1.5px 0 rgba(255,255,255,.5)!important}');
     else if (t === 'neon') o.push('#root [data-app]{background:#05060f!important;box-shadow:0 0 0 2px var(--ring),0 0 22px -2px var(--ring)!important}');
     o.push('#root .st-grab{outline:4px dashed #fff!important;outline-offset:5px!important;z-index:9!important}');
     return o.join('\n');
@@ -780,7 +780,7 @@
       t.style.setProperty('--ico', 'url(https://www.google.com/s2/favicons?domain=' + host + '&sz=128)'); t.classList.add('st-ico');
     }
   }
-  function xIcoCss() { return '#root .st-ico{display:flex!important;align-items:flex-end!important;justify-content:center!important;padding-bottom:10px!important;text-align:center}#root .st-ico::before{content:"";position:absolute;left:50%;top:12%;width:46%;height:52%;transform:translateX(-50%);background:var(--ico) center/contain no-repeat;border-radius:22%;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55));pointer-events:none}#root .st-ico>*{font-size:.6em!important;opacity:.92;position:relative;z-index:1}'; }
+  function xIcoCss() { return '#root .st-ico{display:flex!important;align-items:flex-end!important;justify-content:center!important;padding-bottom:10px!important;text-align:center}#root .st-ico::before{content:"";position:absolute;left:50%;top:12%;width:46%;height:52%;transform:translateX(-50%);background:var(--ico) center/contain no-repeat;border-radius:22%;pointer-events:none}#root .st-ico>*{font-size:.6em!important;opacity:.92;position:relative;z-index:1}'; }
   try { new MutationObserver(function () { if (!icoT) icoT = setTimeout(enhanceTiles, 250); }).observe(document.documentElement, { childList: true, subtree: true }); } catch (e) {}
 
   // after an install, spot the new app, pin it to the dock and tell the user

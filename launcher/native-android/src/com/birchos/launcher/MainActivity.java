@@ -56,7 +56,6 @@ public class MainActivity extends Activity {
     s.setDatabaseEnabled(true);
     s.setMediaPlaybackRequiresUserGesture(false);
     s.setCacheMode(WebSettings.LOAD_DEFAULT);
-    web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
     CookieManager.getInstance().setAcceptCookie(true);
     CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
     web.setBackgroundColor(0xFF000000);
