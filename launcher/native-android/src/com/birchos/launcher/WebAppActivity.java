@@ -247,6 +247,38 @@ public class WebAppActivity extends Activity {
   long lastFrame;
   boolean looping;
 
+  TextView dbg;
+  static final String DBG_JS =
+      "(function(){try{var v=document.querySelector('video');var r=v?v.getBoundingClientRect():null;"
+          + "var fe=document.fullscreenElement||document.webkitFullscreenElement;var fr=fe?fe.getBoundingClientRect():null;"
+          + "var cs=v?getComputedStyle(v):null;var m=document.querySelector('meta[name=viewport]');var vv=window.visualViewport;"
+          + "function R(x){return x?[x.left,x.top,x.width,x.height].map(Math.round).join(','):'-';}"
+          + "return 'js inner='+innerWidth+'x'+innerHeight+' dpr='+devicePixelRatio+' sy='+Math.round(pageYOffset)+"
+          + "' vv='+(vv?Math.round(vv.width)+'x'+Math.round(vv.height)+' s'+vv.scale+' oy'+Math.round(vv.offsetTop):'-')+"
+          + "'\\nfsEl='+(fe?fe.tagName+'.'+String(fe.className).slice(0,25)+' ['+R(fr)+']':'none')+"
+          + "'\\nvideo ['+R(r)+'] src='+(v?v.videoWidth+'x'+v.videoHeight:'-')+' pos='+(cs?cs.position:'-')+' fit='+(cs?cs.objectFit:'-')+' tf='+(cs?cs.transform:'-')+"
+          + "'\\nzoom='+document.documentElement.style.zoom+' meta='+(m?m.content:'none');}catch(e){return 'err '+e;}})()";
+
+  void showDbg() {
+    try {
+      if (fullView == null) return;
+      if (dbg == null) {
+        dbg = new TextView(this); dbg.setTextColor(0xFFFFFF00); dbg.setBackgroundColor(0xCC000000);
+        dbg.setTextSize(12); dbg.setPadding(10, 6, 10, 6);
+      }
+      if (dbg.getParent() == null) fsLayer.addView(dbg, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT));
+      dbg.bringToFront();
+      android.graphics.Point p = realSize();
+      final String nat = "DEBUG v89 native real=" + p.x + "x" + p.y + " dens=" + getResources().getDisplayMetrics().density
+          + "\nfsLayer=" + fsLayer.getWidth() + "x" + fsLayer.getHeight() + " fullView=" + fullView.getWidth() + "x" + fullView.getHeight()
+          + " @" + fullView.getLeft() + "," + fullView.getTop() + " root=" + root.getWidth() + "x" + root.getHeight()
+          + " web=" + web.getWidth() + "x" + web.getHeight() + " wsy=" + web.getScrollY() + " wscale=" + web.getScale();
+      web.evaluateJavascript(DBG_JS, val -> {
+        try { if (dbg != null) dbg.setText(nat + "\n" + (val == null ? "" : val.replace("\\n", "\n"))); } catch (Throwable ignored) {}
+      });
+    } catch (Throwable ignored) {}
+  }
+
   int fitCount;
   final View.OnLayoutChangeListener fsWatcher = (vv, l, t, r, b, ol, ot, or2, ob) -> {
     if (vv != fullView) return;
@@ -449,6 +481,9 @@ public class WebAppActivity extends Activity {
         fsLayer.postDelayed(() -> fitFs(), 50);
         fsLayer.postDelayed(() -> fitFs(), 300);
         fsLayer.postDelayed(() -> fitFs(), 900);
+        fsLayer.postDelayed(() -> showDbg(), 500);
+        fsLayer.postDelayed(() -> showDbg(), 1500);
+        fsLayer.postDelayed(() -> showDbg(), 4000);
       }
       @Override public boolean onCreateWindow(WebView v, boolean d, boolean g, android.os.Message m) { return false; }
       @Override public void onHideCustomView() {
