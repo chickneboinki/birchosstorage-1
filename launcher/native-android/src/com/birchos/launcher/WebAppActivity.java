@@ -36,7 +36,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Movies/web apps — QR/spoof, profile bypass, auto-fs video, v47 cursor. */
+/** Movies/web apps — QR/spoof, profile bypass, in-player auto-FS, v47 cursor. */
 public class WebAppActivity extends Activity {
   static final String SPOOF =
       "(function(){try{if(window.__birchSpoof)return;window.__birchSpoof=1;"
@@ -96,22 +96,46 @@ public class WebAppActivity extends Activity {
           + "apply();setInterval(apply,2000);}catch(e){}})();";
 
   static final String VIDEO_FIX =
-      "(function(){try{if(window.__birchVid2)return;window.__birchVid2=1;"
-          + "function goFs(v){try{"
-          + "if(v.webkitEnterFullscreen){v.webkitEnterFullscreen();return;}"
-          + "if(v.requestFullscreen){v.requestFullscreen();return;}"
-          + "if(v.webkitRequestFullscreen){v.webkitRequestFullscreen();return;}"
-          + "}catch(e){}"
-          + "try{document.querySelectorAll('button,[role=button]').forEach(function(b){"
-          + "var t=((b.getAttribute('aria-label')||'')+' '+(b.innerText||'')).toLowerCase();"
-          + "if(t.indexOf('full')>=0&&t.indexOf('screen')>=0){try{b.click()}catch(x){}}"
-          + "});}catch(e){}}"
-          + "function fix(v){if(!v||v.tagName!=='VIDEO')return;"
-          + "try{v.style.opacity='1';v.style.visibility='visible';v.style.display='block';"
-          + "v.style.width='100%';v.style.maxHeight='100vh';v.style.objectFit='contain';}catch(e){}}"
-          + "document.addEventListener('play',function(e){var v=e.target;if(!v||v.tagName!=='VIDEO')return;fix(v);"
-          + "if(!v.__birchFs){v.__birchFs=1;setTimeout(function(){goFs(v);},250);}},true);"
-          + "setInterval(function(){document.querySelectorAll('video').forEach(fix);},2000);"
+      "(function(){try{if(window.__birchVid3)return;window.__birchVid3=1;"
+          + "function looksFs(el){"
+          + "var t=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.getAttribute('data-tooltip')||'')+' '+(el.className||'')+' '+(el.id||'')+' '+(el.innerText||'')).toLowerCase();"
+          + "if(/full\\s*screen|fullscreen|exit\\s*full|maximize|expand/.test(t))return true;"
+          + "if(/\\b(fs|fullscreen|full-screen|vjs-fullscreen|plyr__control--fullscreen|jw-icon-fullscreen|ytp-fullscreen)\\b/.test(t))return true;"
+          + "return false;}"
+          + "function clickFs(){"
+          + "var nodes=document.querySelectorAll('button,[role=button],a,div,span,i,svg');"
+          + "for(var i=0;i<nodes.length;i++){var el=nodes[i];"
+          + "if(!looksFs(el))continue;"
+          + "var r=el.getBoundingClientRect();if(r.width<8||r.height<8)continue;"
+          + "try{el.click();return true;}catch(e){}"
+          + "try{el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));return true;}catch(e){}}"
+          + "return false;}"
+          + "function tryNative(v){try{"
+          + "if(v.webkitEnterFullscreen){v.webkitEnterFullscreen();return true;}"
+          + "if(v.webkitEnterFullScreen){v.webkitEnterFullScreen();return true;}"
+          + "if(v.requestFullscreen){v.requestFullscreen();return true;}"
+          + "if(v.webkitRequestFullscreen){v.webkitRequestFullscreen();return true;}"
+          + "}catch(e){}return false;}"
+          + "function goFs(v){"
+          + "if(document.fullscreenElement||document.webkitFullscreenElement)return;"
+          + "if(clickFs())return;"
+          + "tryNative(v);"
+          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))clickFs();},400);"
+          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))clickFs();},1200);}"
+          + "function onPlay(e){var v=e.target;if(!v||v.tagName!=='VIDEO')return;"
+          + "try{v.style.opacity='1';v.style.visibility='visible';}catch(x){}"
+          + "if(v.__birchFsTries&&v.__birchFsTries>4)return;"
+          + "v.__birchFsTries=(v.__birchFsTries||0)+1;"
+          + "setTimeout(function(){goFs(v);},300);}"
+          + "document.addEventListener('play',onPlay,true);"
+          + "document.addEventListener('playing',onPlay,true);"
+          + "setInterval(function(){"
+          + "var v=document.querySelector('video');"
+          + "if(!v||v.paused||v.ended)return;"
+          + "if(document.fullscreenElement||document.webkitFullscreenElement)return;"
+          + "if(v.currentTime>0.5&&v.currentTime<8&&(!v.__birchFsTries||v.__birchFsTries<3)){"
+          + "v.__birchFsTries=(v.__birchFsTries||0)+1;goFs(v);}"
+          + "},2000);"
           + "}catch(e){}})();";
 
   static final String NO_POPUPS =
