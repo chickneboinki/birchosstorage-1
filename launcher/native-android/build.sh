@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Builds a signed Birch OS launcher APK without Gradle.
-# Needs: Android build-tools 34 + platform android-34 (BT, PF), and a JDK 17.
 set -euo pipefail
 cd "$(dirname "$0")"
 python3 apply-tv-sync.py
@@ -15,63 +13,17 @@ OUT=${OUT:-/tmp/birch-build}
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -A assets -o "$OUT/base.apk" "$OUT/res.zip" --auto-add-overlay
-# Restore WebAppActivity: b64, or fetch known-good v82 source if local file is broken/truncated
 WA=src/com/birchos/launcher/WebAppActivity.java
-if [ -f "${WA}.b64" ]; then
-  base64 -d "${WA}.b64" > "$WA"
-elif [ -f "${WA}.b64.0" ]; then
-  cat "${WA}.b64."{0,1,2,3} | base64 -d > "$WA"
-elif ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
+if ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
   echo "Fetching WebAppActivity.java from known-good commit e1619523..."
   curl -fsSL "https://raw.githubusercontent.com/chickneboinki/birchosstorage-1/e1619523/launcher/native-android/src/com/birchos/launcher/WebAppActivity.java" -o "$WA"
 fi
-# v83: clamp edge-scroll to real document top/bottom (stops infinite scroll + video offset)
-python3 - <<'PY'
-from pathlib import Path
-p = Path("src/com/birchos/launcher/WebAppActivity.java")
-s = p.read_text()
-old = (
-    "      if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));\n"
-    "      if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));"
-)
-new = (
-    "      // Edge scroll with hard document bounds (no infinite scroll past page start/end)\n"
-    "      if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {\n"
-    "        int amount = (int) (vy * dt * 2f);\n"
-    "        if (amount != 0) {\n"
-    "          // DOM/SPA: clamp window scroll to [0, max]\n"
-    "          web.evaluateJavascript(\n"
-    "              \"(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;\"\n"
-    "                  + \"var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));\"\n"
-    "                  + \"var cur=(se.scrollTop||window.pageYOffset||0);\"\n"
-    "                  + \"var t=Math.max(0,Math.min(max,cur+(\" + amount + \")));\"\n"
-    "                  + \"if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}\"\n"
-    "                  + \"}catch(e){}})();\",\n"
-    "              null);\n"
-    "          // Native WebView scroll: never go above 0\n"
-    "          int y = web.getScrollY();\n"
-    "          if (amount < 0) {\n"
-    "            if (y > 0) web.scrollBy(0, Math.max(amount, -y));\n"
-    "          } else {\n"
-    "            web.scrollBy(0, amount);\n"
-    "          }\n"
-    "          if (web.getScrollY() < 0) web.scrollTo(0, 0);\n"
-    "        }\n"
-    "      }"
-)
-if old in s:
-    s = s.replace(old, new)
-    print("edge-scroll clamp applied")
-else:
-    print("edge-scroll pattern missing or already patched")
-if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
-    s = s.replace(
-        "web.setBackgroundColor(0xFF000000);",
-        "web.setBackgroundColor(0xFF000000);\n    web.setOverScrollMode(View.OVER_SCROLL_NEVER);",
-    )
-    print("overScroll NEVER applied")
-p.write_text(s)
-PY
+if [ -f patch_v84.py ]; then
+  python3 patch_v84.py "$WA"
+elif [ -f patch_v84.py.b64.1 ]; then
+  cat patch_v84.py.b64.1 patch_v84.py.b64.2 | base64 -d > patch_v84.py
+  python3 patch_v84.py "$WA"
+fi
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unaligned.apk"
