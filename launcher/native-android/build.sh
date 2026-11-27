@@ -15,9 +15,12 @@ OUT=${OUT:-/tmp/birch-build}
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -A assets -o "$OUT/base.apk" "$OUT/res.zip" --auto-add-overlay
-# Restore WebAppActivity from base64 if present (avoids huge single-file git payloads)
-if [ -f src/com/birchos/launcher/WebAppActivity.java.b64 ]; then
-  base64 -d src/com/birchos/launcher/WebAppActivity.java.b64 > src/com/birchos/launcher/WebAppActivity.java
+# Restore WebAppActivity from base64 (single file or split parts)
+WA=src/com/birchos/launcher/WebAppActivity.java
+if [ -f "${WA}.b64" ]; then
+  base64 -d "${WA}.b64" > "$WA"
+elif [ -f "${WA}.b64.part1" ] && [ -f "${WA}.b64.part2" ]; then
+  cat "${WA}.b64.part1" "${WA}.b64.part2" | base64 -d > "$WA"
 fi
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
