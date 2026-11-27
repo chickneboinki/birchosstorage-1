@@ -15,14 +15,15 @@ OUT=${OUT:-/tmp/birch-build}
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -A assets -o "$OUT/base.apk" "$OUT/res.zip" --auto-add-overlay
-# Restore WebAppActivity from base64 parts or single file
+# Restore WebAppActivity: b64, or fetch known-good v82 source if local file is broken/truncated
 WA=src/com/birchos/launcher/WebAppActivity.java
 if [ -f "${WA}.b64" ]; then
   base64 -d "${WA}.b64" > "$WA"
 elif [ -f "${WA}.b64.0" ]; then
   cat "${WA}.b64."{0,1,2,3} | base64 -d > "$WA"
-elif [ -f "${WA}.b64.part1" ] && [ -f "${WA}.b64.part2" ]; then
-  cat "${WA}.b64.part1" "${WA}.b64.part2" | base64 -d > "$WA"
+elif ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
+  echo "Fetching WebAppActivity.java from known-good commit e1619523..."
+  curl -fsSL "https://raw.githubusercontent.com/chickneboinki/birchosstorage-1/e1619523/launcher/native-android/src/com/birchos/launcher/WebAppActivity.java" -o "$WA"
 fi
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
