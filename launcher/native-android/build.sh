@@ -25,6 +25,50 @@ elif ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
   echo "Fetching WebAppActivity.java from known-good commit e1619523..."
   curl -fsSL "https://raw.githubusercontent.com/chickneboinki/birchosstorage-1/e1619523/launcher/native-android/src/com/birchos/launcher/WebAppActivity.java" -o "$WA"
 fi
+# v83: clamp edge-scroll to real document top/bottom (stops infinite scroll + video offset)
+python3 - <<'PY'
+from pathlib import Path
+p = Path("src/com/birchos/launcher/WebAppActivity.java")
+s = p.read_text()
+old = (
+    "      if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));\n"
+    "      if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));"
+)
+new = (
+    "      // Edge scroll with hard document bounds (no infinite scroll past page start/end)\n"
+    "      if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {\n"
+    "        int amount = (int) (vy * dt * 2f);\n"
+    "        if (amount != 0) {\n"
+    "          int y = web.getScrollY();\n"
+    "          int maxY = Math.max(0, web.computeVerticalScrollRange() - web.computeVerticalScrollExtent());\n"
+    "          int target = Math.max(0, Math.min(maxY, y + amount));\n"
+    "          if (target != y) web.scrollTo(0, target);\n"
+    "          // Also clamp DOM/SPA window scroll so the page cannot run away\n"
+    "          web.evaluateJavascript(\n"
+    "              \"(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;\"\n"
+    "                  + \"var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));\"\n"
+    "                  + \"var cur=(se.scrollTop||window.pageYOffset||0);\"\n"
+    "                  + \"var t=Math.max(0,Math.min(max,cur+(\" + amount + \")));\"\n"
+    "                  + \"if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}\"\n"
+    "                  + \"}catch(e){}})();\",\n"
+    "              null);\n"
+    "        }\n"
+    "      }"
+)
+if old in s:
+    s = s.replace(old, new)
+    print("edge-scroll clamp applied")
+else:
+    print("edge-scroll pattern missing or already patched")
+# Disable rubber-band overscroll
+if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
+    s = s.replace(
+        "web.setBackgroundColor(0xFF000000);",
+        "web.setBackgroundColor(0xFF000000);\n    web.setOverScrollMode(View.OVER_SCROLL_NEVER);",
+    )
+    print("overScroll NEVER applied")
+p.write_text(s)
+PY
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unaligned.apk"
