@@ -201,10 +201,19 @@ public class WebAppActivity extends Activity {
           + "if(v.currentTime>0.5&&v.currentTime<12&&(!v.__birchFsTries||v.__birchFsTries<4)){"
           + "v.__birchFsTries=(v.__birchFsTries||0)+1;goFs(v);}"
           + "},1500);"
+          + "function kick(){try{if(!(document.fullscreenElement||document.webkitFullscreenElement))return;"
+          + "var docs=[document];[].slice.call(document.querySelectorAll('iframe')).forEach(function(f){try{if(f.contentDocument)docs.push(f.contentDocument);}catch(e){}});"
+          + "docs.forEach(function(d){[].slice.call(d.querySelectorAll('video')).forEach(function(v){try{v.style.setProperty('display','none','important');void v.offsetHeight;v.style.removeProperty('display');}catch(e){}});});"
+          + "pinVideo();if(window.BirchWatch&&BirchWatch.kick)BirchWatch.kick();}catch(e){}}"
           + "function topNow(){try{if(window.BirchWatch&&BirchWatch.topNow)BirchWatch.topNow();}catch(e){}forceTop();}"
           + "function wrapFs(proto,name){try{var o=proto&&proto[name];if(!o||o.__birchW)return;"
-          + "var w=function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))saveScroll();topNow();"
-          + "var r=o.apply(this,arguments);setTimeout(topNow,60);setTimeout(topNow,250);setTimeout(pinVideo,100);setTimeout(pinVideo,400);setTimeout(pinVideo,1000);return r;};"
+          + "var w=function(){var self=this,args=arguments;var inFs=!!(document.fullscreenElement||document.webkitFullscreenElement);"
+          + "if(inFs)return o.apply(self,args);"
+          + "saveScroll();topNow();setTimeout(topNow,40);setTimeout(topNow,100);"
+          + "var after=function(){setTimeout(pinVideo,100);setTimeout(pinVideo,400);setTimeout(kick,350);setTimeout(kick,800);setTimeout(kick,1600);setTimeout(kick,3000);};"
+          + "var p;try{p=new Promise(function(res,rej){setTimeout(function(){try{var r=o.apply(self,args);after();if(r&&r.then)r.then(res,rej);else res();}catch(e){rej(e);}},180);});p.catch(function(){});}"
+          + "catch(e){var r2=o.apply(self,args);after();return r2;}"
+          + "return name==='requestFullscreen'?p:undefined;};"
           + "w.__birchW=1;proto[name]=w;}catch(e){}}"
           + "wrapFs(window.Element&&Element.prototype,'requestFullscreen');"
           + "wrapFs(window.Element&&Element.prototype,'webkitRequestFullscreen');"
@@ -279,7 +288,7 @@ public class WebAppActivity extends Activity {
       if (dbg.getParent() == null) fsLayer.addView(dbg, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT));
       dbg.bringToFront();
       android.graphics.Point p = realSize();
-      final String nat = "DEBUG v90 native real=" + p.x + "x" + p.y + " dens=" + getResources().getDisplayMetrics().density
+      final String nat = "DEBUG v91 savedY=" + savedY + " native real=" + p.x + "x" + p.y + " dens=" + getResources().getDisplayMetrics().density
           + "\nfsLayer=" + fsLayer.getWidth() + "x" + fsLayer.getHeight() + " fullView=" + fullView.getWidth() + "x" + fullView.getHeight()
           + " @" + fullView.getLeft() + "," + fullView.getTop() + " root=" + root.getWidth() + "x" + root.getHeight()
           + " web=" + web.getWidth() + "x" + web.getHeight() + " wsy=" + web.getScrollY() + " wscale=" + web.getScale();
@@ -700,6 +709,11 @@ public class WebAppActivity extends Activity {
 
   class WatchBridge {
     @JavascriptInterface public void save(String json) { Watch.save(WebAppActivity.this, json); }
+    @JavascriptInterface public void kick() { runOnUiThread(() -> { try {
+      fitFs();
+      if (fullView != null) { fullView.requestLayout(); fullView.invalidate(); }
+      web.scrollBy(0, 1); web.scrollBy(0, -1);
+    } catch (Throwable ignored) {} }); }
     @JavascriptInterface public void topNow() { runOnUiThread(() -> { try { web.scrollTo(0, 0); } catch (Throwable ignored) {} }); }
   }
 }

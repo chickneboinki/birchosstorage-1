@@ -74,7 +74,7 @@ jobs:
           export BT="$ANDROID_HOME/build-tools/34.0.0"
           export PF="$ANDROID_HOME/platforms/android-34"
           export VERSION_CODE=$((59 + VERSION_CODE))
-          if [ "$VERSION_CODE" -lt 90 ]; then VERSION_CODE=90; fi
+          if [ "$VERSION_CODE" -lt 91 ]; then VERSION_CODE=91; fi
           echo "$VERSION_CODE" > /tmp/version_code.txt
           echo "Building versionCode=$VERSION_CODE"
           export BIRCH_KEYSTORE_PASSWORD="${BIRCH_KEYSTORE_PASSWORD:-birchos}"
