@@ -39,11 +39,7 @@ new = (
     "      if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {\n"
     "        int amount = (int) (vy * dt * 2f);\n"
     "        if (amount != 0) {\n"
-    "          int y = web.getScrollY();\n"
-    "          int maxY = Math.max(0, web.computeVerticalScrollRange() - web.computeVerticalScrollExtent());\n"
-    "          int target = Math.max(0, Math.min(maxY, y + amount));\n"
-    "          if (target != y) web.scrollTo(0, target);\n"
-    "          // Also clamp DOM/SPA window scroll so the page cannot run away\n"
+    "          // DOM/SPA: clamp window scroll to [0, max]\n"
     "          web.evaluateJavascript(\n"
     "              \"(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;\"\n"
     "                  + \"var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));\"\n"
@@ -52,6 +48,14 @@ new = (
     "                  + \"if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}\"\n"
     "                  + \"}catch(e){}})();\",\n"
     "              null);\n"
+    "          // Native WebView scroll: never go above 0\n"
+    "          int y = web.getScrollY();\n"
+    "          if (amount < 0) {\n"
+    "            if (y > 0) web.scrollBy(0, Math.max(amount, -y));\n"
+    "          } else {\n"
+    "            web.scrollBy(0, amount);\n"
+    "          }\n"
+    "          if (web.getScrollY() < 0) web.scrollTo(0, 0);\n"
     "        }\n"
     "      }"
 )
@@ -60,7 +64,6 @@ if old in s:
     print("edge-scroll clamp applied")
 else:
     print("edge-scroll pattern missing or already patched")
-# Disable rubber-band overscroll
 if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
     s = s.replace(
         "web.setBackgroundColor(0xFF000000);",
