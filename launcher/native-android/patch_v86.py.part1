@@ -1,0 +1,118 @@
+from pathlib import Path
+import sys
+p = Path(sys.argv[1] if len(sys.argv) > 1 else "src/com/birchos/launcher/WebAppActivity.java")
+s = p.read_text()
+
+# edge clamp
+o = (
+    "      if (cy < 50f && vy < 0f) web.scrollBy(0, (int) (vy * dt * 2f));\n"
+    "      if (cy > h - 50f && vy > 0f) web.scrollBy(0, (int) (vy * dt * 2f));"
+)
+n = (
+    "      if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {\n"
+    "        int amount = (int) (vy * dt * 2f);\n"
+    "        if (amount != 0) {\n"
+    "          web.evaluateJavascript(\n"
+    "              \"(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;\"\n"
+    "                  + \"var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));\"\n"
+    "                  + \"var cur=(se.scrollTop||window.pageYOffset||0);\"\n"
+    "                  + \"var t=Math.max(0,Math.min(max,cur+(\" + amount + \")));\"\n"
+    "                  + \"if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}\"\n"
+    "                  + \"}catch(e){}})();\",\n"
+    "              null);\n"
+    "          int y = web.getScrollY();\n"
+    "          if (amount < 0) { if (y > 0) web.scrollBy(0, Math.max(amount, -y)); }\n"
+    "          else { web.scrollBy(0, amount); }\n"
+    "          if (web.getScrollY() < 0) web.scrollTo(0, 0);\n"
+    "        }\n"
+    "      }"
+)
+if o in s:
+    s = s.replace(o, n)
+    print("edge ok")
+
+if "setOverScrollMode" not in s and "web.setBackgroundColor" in s:
+    s = s.replace(
+        "web.setBackgroundColor(0xFF000000);",
+        "web.setBackgroundColor(0xFF000000);\n    web.setOverScrollMode(View.OVER_SCROLL_NEVER);",
+    )
+
+for m in ("__birchVid5", "__birchVid6", "__birchVid7", "__birchVid8"):
+    s = s.replace("window." + m, "window.__birchVid9")
+
+# CSS: add video.birch-pin and object-position, keep transform none out
+s = s.replace(
+    "video:fullscreen,video:-webkit-full-screen,:fullscreen video,:-webkit-full-screen video{",
+    "video.birch-pin,video:fullscreen,video:-webkit-full-screen,:fullscreen video,:-webkit-full-screen video{",
+)
+s = s.replace(
+    "object-fit:contain!important;background:#000!important;z-index:2147483647!important;transform:none!important}",
+    "object-fit:contain!important;object-position:center center!important;background:#000!important;z-index:2147483647!important}",
+)
+s = s.replace(
+    "video{object-fit:contain!important};",
+    "video{object-fit:contain!important;object-position:center center!important};",
+)
+# note: actual source uses 'video{object-fit:contain!important}';'
+s = s.replace(
+    "video{object-fit:contain!important}';",
+    "video{object-fit:contain!important;object-position:center center!important}';",
+)
+print("css tweaks ok")
+
+# Insert pin helpers after forceTop
+old_ft = (
+    '+ "function forceTop(){try{window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body&&(document.body.scrollTop=0);"\n'
+    '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=0;}catch(e){}"'
+)
+new_ft = (
+    '+ "function forceTop(){try{window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body&&(document.body.scrollTop=0);"\n'
+    '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=0;}catch(e){}"\n'
+    '          + "function saveScroll(){try{window.__birchSavedY=window.pageYOffset||document.documentElement.scrollTop||0;}catch(e){window.__birchSavedY=0;}}"\n'
+    '          + "function restoreScroll(){try{var y=window.__birchSavedY||0;if(y>0){window.scrollTo(0,y);"\n'
+    '          + "if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}}"\n'
+    '          + "function pinVideo(v){try{forceTop();injectFsCss();"\n'
+    '          + "var list=v?[v]:[].slice.call(document.querySelectorAll(\'video\'));"\n'
+    '          + "list.forEach(function(vid){if(!vid)return;vid.classList.add(\'birch-pin\');"\n'
+    '          + "vid.style.setProperty(\'position\',\'fixed\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'top\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'left\',\'0px\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'width\',\'100vw\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'height\',\'100vh\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'max-width\',\'none\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'max-height\',\'none\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'object-fit\',\'contain\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'object-position\',\'center center\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'z-index\',\'2147483647\',\'important\');"\n'
+    '          + "vid.style.setProperty(\'background\',\'#000\',\'important\');});forceTop();}catch(e){}}"\n'
+    '          + "function unpinVideo(){try{document.querySelectorAll(\'video.birch-pin\').forEach(function(vid){"\n'
+    '          + "vid.classList.remove(\'birch-pin\');"\n'
+    '          + "[\'position\',\'top\',\'left\',\'width\',\'height\',\'max-width\',\'max-height\',\'z-index\',\'background\'].forEach(function(p){"\n'
+    '          + "try{vid.style.removeProperty(p);}catch(e){}});});restoreScroll();}catch(e){}}"'
+)
+if old_ft in s:
+    s = s.replace(old_ft, new_ft)
+    print("pin helpers ok")
+else:
+    print("forceTop missing")
+
+s = s.replace(
+    'function clickFs(){forceTop();injectFsCss();"',
+    'function clickFs(){saveScroll();pinVideo();injectFsCss();"',
+)
+s = s.replace(
+    'if(document.fullscreenElement||document.webkitFullscreenElement){forceTop();return;}"\n          + "forceTop();keepVisible(v);injectFsCss();"',
+    'if(document.fullscreenElement||document.webkitFullscreenElement){pinVideo(v);return;}"\n          + "saveScroll();pinVideo(v);keepVisible(v);injectFsCss();"',
+)
+s = s.replace(
+    'if(clickFs()){setTimeout(forceTop,50);setTimeout(forceTop,300);return;}"\n          + "tryNative(v);setTimeout(forceTop,50);setTimeout(forceTop,300);"',
+    'if(clickFs()){setTimeout(function(){pinVideo(v);},50);setTimeout(function(){pinVideo(v);},300);return;}"\n          + "tryNative(v);setTimeout(function(){pinVideo(v);},50);setTimeout(function(){pinVideo(v);},300);"',
+)
+s = s.replace(
+    "document.addEventListener('fullscreenchange',function(){forceTop();injectFsCss();},true);\"",
+    "document.addEventListener('fullscreenchange',function(){injectFsCss();if(document.fullscreenElement)pinVideo();else unpinVideo();},true);\"",
+)
+s = s.replace(
+    "document.addEventListener('webkitfullscreenchange',function(){forceTop();injectFsCss();},true);\"",
+    "document.addEventListener('webkitfullscreenchange',function(){injectFsCss();if(document.webkitFullscreenElement)pinVideo();else unpinVideo();},true);\"",
+)
