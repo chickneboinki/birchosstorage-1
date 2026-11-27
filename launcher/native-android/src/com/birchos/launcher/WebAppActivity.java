@@ -332,6 +332,8 @@ public class WebAppActivity extends Activity {
   }
 
   volatile boolean pseudoFs;
+  boolean fsRetry;
+  int restoreY;
   int fitCount;
   final View.OnLayoutChangeListener fsWatcher = (vv, l, t, r, b, ol, ot, or2, ob) -> {
     if (vv != fullView) return;
@@ -498,8 +500,28 @@ public class WebAppActivity extends Activity {
       @Override public Bitmap getDefaultVideoPoster() { return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888); }
       @Override public void onShowCustomView(View v, CustomViewCallback cb) {
         if (fullView == null) {
-          savedY = 0;
-          try { savedY = web.getScrollY(); } catch (Throwable ignored) {}
+          int sy = 0;
+          try { sy = web.getScrollY(); } catch (Throwable ignored) {}
+          if (sy > 0 && !fsRetry) {
+            // Fullscreen started while the page was scrolled (e.g. a player in another site's frame, which the page
+            // script can't reach). The video layer would be mispositioned: reject it, scroll to top, request it again.
+            fsRetry = true; restoreY = sy; savedY = 0;
+            try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
+            try { web.evaluateJavascript("try{window.scrollTo(0,0);document.documentElement.scrollTop=0;if(document.body)document.body.scrollTop=0;}catch(e){}", null); } catch (Throwable ignored) {}
+            try { cb.onCustomViewHidden(); } catch (Throwable ignored) {}
+            web.postDelayed(() -> {
+              try {
+                web.evaluateJavascript(
+                    "(function(){try{var vis=function(x){var r=x.getBoundingClientRect();return r.width>80&&r.height>80;};"
+                        + "var c=[].slice.call(document.querySelectorAll('iframe,video')).filter(vis).sort(function(a,b){var A=a.getBoundingClientRect(),B=b.getBoundingClientRect();return B.width*B.height-A.width*A.height;})[0];"
+                        + "if(!c)return;var f=c.requestFullscreen||c.webkitRequestFullscreen;if(f)f.call(c);}catch(e){}})();", null);
+              } catch (Throwable ignored) {}
+            }, 350);
+            web.postDelayed(() -> { fsRetry = false; if (fullView == null) restoreY = 0; }, 4000);
+            return;
+          }
+          savedY = sy;
+          if (savedY == 0 && fsRetry && restoreY > 0) savedY = restoreY;
         } else if (fullView != v) {
           // fullscreen -> fullscreen (e.g. site fullscreen then player fullscreen): swap the view, don't reject it
           try { fullView.removeOnLayoutChangeListener(fsWatcher); } catch (Throwable ignored) {}
