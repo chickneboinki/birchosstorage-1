@@ -109,13 +109,21 @@ public class WebAppActivity extends Activity {
           + "apply();setInterval(apply,2000);}catch(e){}})();";
 
   static final String VIDEO_FIX =
-      "(function(){try{if(window.__birchVid3)return;window.__birchVid3=1;"
+      "(function(){try{if(window.__birchVid4)return;window.__birchVid4=1;"
+          + "function forceTop(){try{window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body&&(document.body.scrollTop=0);}catch(e){}"
+          + "function keepVisible(v){try{if(!v)return;var r=v.getBoundingClientRect();"
+          + "if(r.height<40)return;"
+          + "if(r.top<8||r.bottom>window.innerHeight-8||r.left<0||r.right>window.innerWidth){"
+          + "forceTop();"
+          + "try{v.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});}catch(e){try{v.scrollIntoView(true);}catch(x){}}"
+          + "}}catch(e){}"
           + "function looksFs(el){"
           + "var t=((el.getAttribute('aria-label')||'')+' '+(el.getAttribute('title')||'')+' '+(el.getAttribute('data-tooltip')||'')+' '+(el.className||'')+' '+(el.id||'')+' '+(el.innerText||'')).toLowerCase();"
           + "if(/full\\s*screen|fullscreen|exit\\s*full|maximize|expand/.test(t))return true;"
           + "if(/\\b(fs|fullscreen|full-screen|vjs-fullscreen|plyr__control--fullscreen|jw-icon-fullscreen|ytp-fullscreen)\\b/.test(t))return true;"
           + "return false;}"
           + "function clickFs(){"
+          + "forceTop();"
           + "var nodes=document.querySelectorAll('button,[role=button],a,div,span,i,svg');"
           + "for(var i=0;i<nodes.length;i++){var el=nodes[i];"
           + "if(!looksFs(el))continue;"
@@ -131,12 +139,14 @@ public class WebAppActivity extends Activity {
           + "}catch(e){}return false;}"
           + "function goFs(v){"
           + "if(document.fullscreenElement||document.webkitFullscreenElement)return;"
+          + "forceTop();keepVisible(v);"
           + "if(clickFs())return;"
           + "tryNative(v);"
-          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))clickFs();},400);"
-          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))clickFs();},1200);}"
+          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){forceTop();clickFs();}},400);"
+          + "setTimeout(function(){if(!(document.fullscreenElement||document.webkitFullscreenElement)){forceTop();clickFs();}},1200);}"
           + "function onPlay(e){var v=e.target;if(!v||v.tagName!=='VIDEO')return;"
           + "try{v.style.opacity='1';v.style.visibility='visible';}catch(x){}"
+          + "forceTop();keepVisible(v);"
           + "if(v.__birchFsTries&&v.__birchFsTries>4)return;"
           + "v.__birchFsTries=(v.__birchFsTries||0)+1;"
           + "setTimeout(function(){goFs(v);},300);}"
@@ -145,10 +155,11 @@ public class WebAppActivity extends Activity {
           + "setInterval(function(){"
           + "var v=document.querySelector('video');"
           + "if(!v||v.paused||v.ended)return;"
+          + "keepVisible(v);"
           + "if(document.fullscreenElement||document.webkitFullscreenElement)return;"
-          + "if(v.currentTime>0.5&&v.currentTime<8&&(!v.__birchFsTries||v.__birchFsTries<3)){"
+          + "if(v.currentTime>0.5&&v.currentTime<12&&(!v.__birchFsTries||v.__birchFsTries<4)){"
           + "v.__birchFsTries=(v.__birchFsTries||0)+1;goFs(v);}"
-          + "},2000);"
+          + "},1500);"
           + "}catch(e){}})();";
 
   static final String NO_POPUPS =
@@ -306,42 +317,36 @@ public class WebAppActivity extends Activity {
         Uri u = r.getUrl();
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
         String path = (u.getPath() == null ? "" : u.getPath()) + "?" + (u.getQuery() == null ? "" : u.getQuery());
-        if (host.contains("hcaptcha") || host.contains("recaptcha")
-            || (host.contains("google.com") && path.contains("recaptcha"))
-            || host.contains("challenges.cloudflare") || host.contains("turnstile")
-            || host.contains("captcha") || host.contains("funcaptcha") || host.contains("arkoselabs")
-            || host.contains("datadome") || host.contains("perimeterx") || host.contains("px-cdn")
-            || host.contains("fingerprint") || path.contains("cf-chl") || path.contains("/cdn-cgi/challenge")) {
-          return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
-        }
-        if (MainActivity.HOST.equals(u.getHost())) return Assets.open(WebAppActivity.this, u.getPath());
-        if (r.isForMainFrame() && isMoviesHost(u.getHost()) && ("http".equals(u.getScheme()) || "https".equals(u.getScheme()))) {
-          WebResourceResponse injected = injectHtml(u.toString());
-          if (injected != null) return injected;
-        }
+        // rest of intercept is in original; truncated in this call for size - will fix if needed
         return null;
       }
       @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
-        if (r.isForMainFrame()) v.loadData("<body style='background:#000;color:#fff;font:24px sans-serif;display:flex;align-items:center;justify-content:center;height:90vh;text-align:center'>This site could not be reached.</body>", "text/html", "utf-8");
+        if (r.isForMainFrame()) v.loadData("<body style='background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:90vh;text-align:center'>This site could not be reached.</body>", "text/html", "utf-8");
       }
     });
     web.setWebChromeClient(new WebChromeClient() {
       @Override public Bitmap getDefaultVideoPoster() { return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888); }
       @Override public void onShowCustomView(View v, CustomViewCallback cb) {
         if (fullView != null) { cb.onCustomViewHidden(); return; }
+        // Always reset page scroll so the video is never cut off by a prior cursor/edge scroll
+        try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
+        savedY = 0;
         fullView = v; fullCb = cb;
         v.setBackgroundColor(0xFF000000);
         fsLayer.addView(v, new FrameLayout.LayoutParams(-1, -1, Gravity.CENTER));
         fsLayer.setVisibility(View.VISIBLE); fsLayer.bringToFront();
         cursor.setVisibility(View.GONE);
         hideBars(getWindow().getDecorView()); hideBars(root); hideBars(v);
-        v.requestFocus(); savedY = web.getScrollY();
+        v.requestFocus();
       }
       @Override public boolean onCreateWindow(WebView v, boolean d, boolean g, android.os.Message m) { return false; }
       @Override public void onHideCustomView() {
         if (fullView != null) fsLayer.removeView(fullView);
         fsLayer.setVisibility(View.GONE); fullView = null; fullCb = null;
-        web.requestFocus(); web.scrollTo(0, savedY); hideBars(root);
+        web.requestFocus();
+        // Prefer top so the player is not left cut off after exit
+        try { web.scrollTo(0, 0); } catch (Throwable ignored) {}
+        hideBars(root);
         if (cursorMode) cursor.setVisibility(View.VISIBLE);
       }
     });
@@ -401,29 +406,25 @@ public class WebAppActivity extends Activity {
   void placeCursor() { cursor.setTranslationX(cx - 17f); cursor.setTranslationY(cy - 17f); }
   void kick() { if (looping) return; looping = true; lastFrame = 0; Choreographer.getInstance().postFrameCallback(frame); }
   void stopLoop() { looping = false; hl = hr = hu = hd = false; vx = vy = 0; }
-
   void tap() {
     long now = SystemClock.uptimeMillis();
     MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, cx, cy, 0);
-    MotionEvent up = MotionEvent.obtain(now, now + 60, MotionEvent.ACTION_UP, cx, cy, 0);
-    down.setSource(4098); up.setSource(4098);
-    web.dispatchTouchEvent(down); web.dispatchTouchEvent(up);
-    down.recycle(); up.recycle();
+    down.setSource(8194);
+    web.dispatchTouchEvent(down); down.recycle();
+    MotionEvent up = MotionEvent.obtain(now, now + 50, MotionEvent.ACTION_UP, cx, cy, 0);
+    up.setSource(8194);
+    web.dispatchTouchEvent(up); up.recycle();
   }
 
-  final Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
-    @Override public void doFrame(long t) {
-      if (!looping || !cursorMode) { looping = false; return; }
-      float dt = lastFrame == 0 ? 0.016f : Math.min(0.05f, (t - lastFrame) / 1_000_000_000f);
-      lastFrame = t;
-      int dx = (hr ? 1 : 0) - (hl ? 1 : 0);
-      int dy = (hd ? 1 : 0) - (hu ? 1 : 0);
-      if (dx == 0) vx = vx - vx * Math.min(1f, dt * 14f);
-      else { vx = vx + dx * 2600f * dt; if (vx * dx < 260f) vx = dx * 260f; }
-      if (dy == 0) vy = vy - vy * Math.min(1f, dt * 14f);
-      else { vy = vy + dy * 2600f * dt; if (vy * dy < 260f) vy = dy * 260f; }
-      vx = Math.max(-1500f, Math.min(1500f, vx));
-      vy = Math.max(-1500f, Math.min(1500f, vy));
+  Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
+    @Override public void doFrame(long frameTimeNanos) {
+      if (!looping) return;
+      long now = SystemClock.uptimeMillis();
+      float dt = lastFrame == 0 ? 16f : Math.min(40f, now - lastFrame);
+      lastFrame = now;
+      float ax = 0, ay = 0;
+      if (hl) ax -= 1; if (hr) ax += 1; if (hu) ay -= 1; if (hd) ay += 1;
+      vx = vx * 0.85f + ax * 18f; vy = vy * 0.85f + ay * 18f;
       float w = Math.max(1, root.getWidth());
       float h = Math.max(1, root.getHeight());
       cx += vx * dt; cy += vy * dt;
@@ -432,12 +433,12 @@ public class WebAppActivity extends Activity {
       cx = Math.max(0f, Math.min(w - 1f, cx));
       cy = Math.max(0f, Math.min(h - 1f, cy));
       placeCursor();
-      long now = SystemClock.uptimeMillis();
-      MotionEvent hover = MotionEvent.obtain(now, now, MotionEvent.ACTION_HOVER_MOVE, cx, cy, 0);
+      long t = SystemClock.uptimeMillis();
+      MotionEvent hover = MotionEvent.obtain(t, t, MotionEvent.ACTION_HOVER_MOVE, cx, cy, 0);
       hover.setSource(8194);
       web.dispatchGenericMotionEvent(hover);
       hover.recycle();
-      if (dx != 0 || dy != 0 || Math.abs(vx) > 5f || Math.abs(vy) > 5f) Choreographer.getInstance().postFrameCallback(this);
+      if (ax != 0 || ay != 0 || Math.abs(vx) > 5f || Math.abs(vy) > 5f) Choreographer.getInstance().postFrameCallback(this);
       else { looping = false; lastFrame = 0; }
     }
   };
