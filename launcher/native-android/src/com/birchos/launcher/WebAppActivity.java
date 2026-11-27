@@ -193,6 +193,15 @@ public class WebAppActivity extends Activity {
           + "if(v.currentTime>0.5&&v.currentTime<12&&(!v.__birchFsTries||v.__birchFsTries<4)){"
           + "v.__birchFsTries=(v.__birchFsTries||0)+1;goFs(v);}"
           + "},1500);"
+          + "function topNow(){try{if(window.BirchWatch&&BirchWatch.topNow)BirchWatch.topNow();}catch(e){}forceTop();}"
+          + "function wrapFs(proto,name){try{var o=proto&&proto[name];if(!o||o.__birchW)return;"
+          + "var w=function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))saveScroll();topNow();"
+          + "var r=o.apply(this,arguments);setTimeout(topNow,60);setTimeout(topNow,250);return r;};"
+          + "w.__birchW=1;proto[name]=w;}catch(e){}}"
+          + "wrapFs(window.Element&&Element.prototype,'requestFullscreen');"
+          + "wrapFs(window.Element&&Element.prototype,'webkitRequestFullscreen');"
+          + "wrapFs(window.Element&&Element.prototype,'webkitRequestFullScreen');"
+          + "wrapFs(window.HTMLVideoElement&&HTMLVideoElement.prototype,'webkitEnterFullscreen');"
           + "}catch(e){}})();";
 
   static final String NO_POPUPS =
@@ -646,5 +655,6 @@ public class WebAppActivity extends Activity {
 
   class WatchBridge {
     @JavascriptInterface public void save(String json) { Watch.save(WebAppActivity.this, json); }
+    @JavascriptInterface public void topNow() { runOnUiThread(() -> { try { web.scrollTo(0, 0); } catch (Throwable ignored) {} }); }
   }
 }
