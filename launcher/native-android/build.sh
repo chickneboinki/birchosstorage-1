@@ -13,17 +13,6 @@ OUT=${OUT:-/tmp/birch-build}
 rm -rf "$OUT" && mkdir -p "$OUT/classes" "$OUT/dex"
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -I "$JAR" --manifest AndroidManifest.xml -A assets -o "$OUT/base.apk" "$OUT/res.zip" --auto-add-overlay
-WA=src/com/birchos/launcher/WebAppActivity.java
-if ! grep -q "onShowCustomView" "$WA" 2>/dev/null; then
-  echo "Fetching WebAppActivity.java from known-good commit e1619523..."
-  curl -fsSL "https://raw.githubusercontent.com/chickneboinki/birchosstorage-1/e1619523/launcher/native-android/src/com/birchos/launcher/WebAppActivity.java" -o "$WA"
-fi
-if [ -f patch_v86.py ]; then
-  python3 patch_v86.py "$WA"
-elif [ -f patch_v86.py.part1 ]; then
-  cat patch_v86.py.part1 patch_v86.py.part2 > patch_v86.py
-  python3 patch_v86.py "$WA"
-fi
 javac -encoding UTF-8 -source 8 -target 8 -nowarn -cp "$JAR" -d "$OUT/classes" $(find src -name '*.java')
 "$BT/d8" --lib "$JAR" --min-api 22 --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$OUT/base.apk" "$OUT/unaligned.apk"
