@@ -116,7 +116,7 @@ public class WebAppActivity extends Activity {
           + "function restoreScroll(){try{var y=window.__birchSavedY||0;if(y>0){window.scrollTo(0,y);"
           + "if(document.scrollingElement)document.scrollingElement.scrollTop=y;}}catch(e){}}"
           + "function pinVideo(v){try{if(!(document.fullscreenElement||document.webkitFullscreenElement))return;"
-          + "forceTop();injectFsCss();document.documentElement.style.zoom='1';if(document.body)document.body.style.zoom='1';"
+          + "fixFrames(true);forceTop();injectFsCss();document.documentElement.style.zoom='1';if(document.body)document.body.style.zoom='1';"
           + "var list=v?[v]:[].slice.call(document.querySelectorAll('video'));"
           + "list.forEach(function(vid){if(!vid)return;vid.classList.add('birch-pin');"
           + "vid.style.setProperty('position','fixed','important');"
@@ -130,7 +130,15 @@ public class WebAppActivity extends Activity {
           + "vid.style.setProperty('object-position','center center','important');"
           + "vid.style.setProperty('z-index','2147483647','important');"
           + "vid.style.setProperty('background','#000','important');});forceTop();}catch(e){}}"
-          + "function unpinVideo(){try{document.querySelectorAll('video.birch-pin').forEach(function(vid){"
+          + "function fixDoc(d,on,depth){try{if(!d||depth>3)return;"
+          + "if(on&&!d.getElementById('birch-frame-css')){var st=d.createElement('style');st.id='birch-frame-css';"
+          + "st.textContent='html.birch-fs,html.birch-fs body{margin:0!important;padding:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;overflow:hidden!important;background:#000!important;zoom:1!important}"
+          + "html.birch-fs video{position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;margin:0!important;object-fit:contain!important;object-position:center center!important;transform:none!important;background:#000!important;z-index:0!important}';"
+          + "(d.head||d.documentElement).appendChild(st);}"
+          + "var el=d.documentElement;if(el){if(on)el.classList.add('birch-fs');else el.classList.remove('birch-fs');}"
+          + "[].slice.call(d.querySelectorAll('iframe')).forEach(function(f){try{fixDoc(f.contentDocument,on,depth+1);}catch(e){}});}catch(e){}}"
+          + "function fixFrames(on){try{fixDoc(document,false,9);[].slice.call(document.querySelectorAll('iframe')).forEach(function(f){try{fixDoc(f.contentDocument,on,1);}catch(e){}});}catch(e){}}"
+          + "function unpinVideo(){try{fixFrames(false);document.querySelectorAll('video.birch-pin').forEach(function(vid){"
           + "vid.classList.remove('birch-pin');"
           + "['position','top','left','width','height','max-width','max-height','z-index','background'].forEach(function(p){"
           + "try{vid.style.removeProperty(p);}catch(e){}});});restoreScroll();}catch(e){}}"
@@ -189,14 +197,14 @@ public class WebAppActivity extends Activity {
           + "var v=document.querySelector('video');"
           + "if(!v||v.paused||v.ended)return;"
           + "keepVisible(v);injectFsCss();"
-          + "if(document.fullscreenElement||document.webkitFullscreenElement){forceTop();return;}"
+          + "if(document.fullscreenElement||document.webkitFullscreenElement){pinVideo();return;}"
           + "if(v.currentTime>0.5&&v.currentTime<12&&(!v.__birchFsTries||v.__birchFsTries<4)){"
           + "v.__birchFsTries=(v.__birchFsTries||0)+1;goFs(v);}"
           + "},1500);"
           + "function topNow(){try{if(window.BirchWatch&&BirchWatch.topNow)BirchWatch.topNow();}catch(e){}forceTop();}"
           + "function wrapFs(proto,name){try{var o=proto&&proto[name];if(!o||o.__birchW)return;"
           + "var w=function(){if(!(document.fullscreenElement||document.webkitFullscreenElement))saveScroll();topNow();"
-          + "var r=o.apply(this,arguments);setTimeout(topNow,60);setTimeout(topNow,250);return r;};"
+          + "var r=o.apply(this,arguments);setTimeout(topNow,60);setTimeout(topNow,250);setTimeout(pinVideo,100);setTimeout(pinVideo,400);setTimeout(pinVideo,1000);return r;};"
           + "w.__birchW=1;proto[name]=w;}catch(e){}}"
           + "wrapFs(window.Element&&Element.prototype,'requestFullscreen');"
           + "wrapFs(window.Element&&Element.prototype,'webkitRequestFullscreen');"
@@ -257,7 +265,9 @@ public class WebAppActivity extends Activity {
           + "' vv='+(vv?Math.round(vv.width)+'x'+Math.round(vv.height)+' s'+vv.scale+' oy'+Math.round(vv.offsetTop):'-')+"
           + "'\\nfsEl='+(fe?fe.tagName+'.'+String(fe.className).slice(0,25)+' ['+R(fr)+']':'none')+"
           + "'\\nvideo ['+R(r)+'] src='+(v?v.videoWidth+'x'+v.videoHeight:'-')+' pos='+(cs?cs.position:'-')+' fit='+(cs?cs.objectFit:'-')+' tf='+(cs?cs.transform:'-')+"
-          + "'\\nzoom='+document.documentElement.style.zoom+' meta='+(m?m.content:'none');}catch(e){return 'err '+e;}})()";
+          + "'\\nzoom='+document.documentElement.style.zoom+' meta='+(m?m.content:'none')+'\\nframe='+(function(){try{var f=(fe&&fe.tagName==='IFRAME')?fe:document.querySelector('iframe');var d=f&&f.contentDocument;if(!d)return 'NO-ACCESS(cross-origin)';"
+          + "var iv=d.querySelector('video');var ir=iv?iv.getBoundingClientRect():null;var c=iv?f.contentWindow.getComputedStyle(iv):null;"
+          + "return f.contentWindow.innerWidth+'x'+f.contentWindow.innerHeight+' vid['+R(ir)+'] src='+(iv?iv.videoWidth+'x'+iv.videoHeight:'-')+' fit='+(c?c.objectFit:'-')+' pos='+(c?c.position:'-')+' cls='+d.documentElement.className+' nested='+d.querySelectorAll('iframe').length;}catch(e){return 'ERR '+e;}})();}catch(e){return 'err '+e;}})()";
 
   void showDbg() {
     try {
@@ -269,7 +279,7 @@ public class WebAppActivity extends Activity {
       if (dbg.getParent() == null) fsLayer.addView(dbg, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT));
       dbg.bringToFront();
       android.graphics.Point p = realSize();
-      final String nat = "DEBUG v89 native real=" + p.x + "x" + p.y + " dens=" + getResources().getDisplayMetrics().density
+      final String nat = "DEBUG v90 native real=" + p.x + "x" + p.y + " dens=" + getResources().getDisplayMetrics().density
           + "\nfsLayer=" + fsLayer.getWidth() + "x" + fsLayer.getHeight() + " fullView=" + fullView.getWidth() + "x" + fullView.getHeight()
           + " @" + fullView.getLeft() + "," + fullView.getTop() + " root=" + root.getWidth() + "x" + root.getHeight()
           + " web=" + web.getWidth() + "x" + web.getHeight() + " wsy=" + web.getScrollY() + " wscale=" + web.getScale();
