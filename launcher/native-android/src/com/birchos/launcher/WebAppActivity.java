@@ -287,6 +287,15 @@ public class WebAppActivity extends Activity {
   WebView web;
   View fullView, cursor, chooser;
   FrameLayout root, fsLayer;
+  FrameLayout splash;
+  long splashAt;
+  void endSplash() {
+    final FrameLayout sp = splash;
+    if (sp == null) return;
+    long wait = Math.max(0L, 1300L - (android.os.SystemClock.uptimeMillis() - splashAt));
+    splash = null;
+    root.postDelayed(() -> Splash.dismiss(sp), wait);
+  }
   boolean cursorMode;
   float cx = 400, cy = 300;
   String homeBase = "";
@@ -475,6 +484,7 @@ public class WebAppActivity extends Activity {
         v.evaluateJavascript(WATCH_JS, null);
         if (Pic.js != null) v.evaluateJavascript(Pic.js, null);
         persistCookies();
+        endSplash();
       }
       @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
         Uri u = r.getUrl();
@@ -598,6 +608,14 @@ public class WebAppActivity extends Activity {
     fsLayer = new FrameLayout(this);
     fsLayer.setBackgroundColor(0xFF000000); fsLayer.setVisibility(View.GONE);
     root.addView(fsLayer, new FrameLayout.LayoutParams(-1, -1));
+    try {
+      splash = Splash.build(this);
+      root.addView(splash, new FrameLayout.LayoutParams(-1, -1));
+      Splash.play(splash);
+      Splash.chime();
+      splashAt = android.os.SystemClock.uptimeMillis();
+      root.postDelayed(() -> endSplash(), 7000);
+    } catch (Throwable t) { splash = null; }
     setContentView(root); hideBars(root);
     String url = getIntent().getStringExtra("url");
     if (url != null) { try { homeBase = base(Uri.parse(url).getHost()); } catch (Throwable t) { homeBase = ""; } }

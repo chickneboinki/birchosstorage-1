@@ -84,13 +84,32 @@ public class MainActivity extends Activity {
     });
     web.addJavascriptInterface(new Bridge(), "BirchAndroid");
     web.setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-    setContentView(web);
+    rootFrame = new android.widget.FrameLayout(this);
+    rootFrame.setBackgroundColor(0xFF000000);
+    rootFrame.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+    setContentView(rootFrame);
     web.loadUrl(URL);
   }
 
   @Override protected void onPause() {
     try { CookieManager.getInstance().flush(); } catch (Throwable ignored) {}
     super.onPause();
+  }
+
+  android.widget.FrameLayout rootFrame, splashView;
+  void clearSplash() {
+    if (splashView != null) { try { rootFrame.removeView(splashView); } catch (Throwable ignored) {} splashView = null; }
+  }
+  /** Plays the short Birch OS intro over the launcher, then runs go (starts the app) while it is still showing. */
+  void showSplash(final Runnable go) {
+    if (splashView != null) return;
+    try {
+      splashView = Splash.build(this);
+      rootFrame.addView(splashView, new android.widget.FrameLayout.LayoutParams(-1, -1));
+      Splash.play(splashView);
+      Splash.chime();
+    } catch (Throwable t) { splashView = null; go.run(); return; }
+    rootFrame.postDelayed(go, 750);
   }
 
   long lastStopAt;
@@ -103,6 +122,7 @@ public class MainActivity extends Activity {
   @Override protected void onStart() {
     super.onStart();
     try { web.onResume(); } catch (Throwable ignored) {}
+    clearSplash();
     // after a very long time in the background, reload the home page to drop any accumulated JS heap
     if (lastStopAt > 0 && android.os.SystemClock.elapsedRealtime() - lastStopAt > 45L * 60L * 1000L) {
       try { web.reload(); } catch (Throwable ignored) {}
@@ -294,7 +314,7 @@ public class MainActivity extends Activity {
       if (i == null) return false;
       i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
       final Intent li = i;
-      runOnUiThread(() -> { try { startActivity(li, android.app.ActivityOptions.makeCustomAnimation(MainActivity.this, 0, 0).toBundle()); } catch (Throwable t) { startActivity(li); } });
+      runOnUiThread(() -> showSplash(() -> { try { startActivity(li, android.app.ActivityOptions.makeCustomAnimation(MainActivity.this, 0, 0).toBundle()); } catch (Throwable t) { try { startActivity(li); } catch (Throwable ignored) {} } }));
       return true;
     }
     @JavascriptInterface public void openStore(String pkg) {
