@@ -657,6 +657,8 @@ public class WebAppActivity extends Activity {
     up.recycle();
   }
 
+  long lastEdgeJs;
+  float lastHx = -1f, lastHy = -1f;
   Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
     @Override public void doFrame(long frameTimeNanos) {
       if (!looping || !cursorMode) {
@@ -690,28 +692,37 @@ public class WebAppActivity extends Activity {
       if ((cy < 50f && vy < 0f) || (cy > h - 50f && vy > 0f)) {
         int amount = (int) (vy * dt * 2f);
         if (amount != 0) {
-          web.evaluateJavascript(
-              "(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;"
-                  + "var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));"
-                  + "var cur=(se.scrollTop||window.pageYOffset||0);"
-                  + "var t=Math.max(0,Math.min(max,cur+(" + amount + ")));"
-                  + "if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}"
-                  + "}catch(e){}})();",
-              null);
-          int y = web.getScrollY();
-          if (amount < 0) { if (y > 0) web.scrollBy(0, Math.max(amount, -y)); }
+          // Native scroll only. The JS fallback runs at most ~8x/sec and only when native scroll didn't move
+          // (pages that scroll an inner element), instead of calling into the WebView on every frame.
+          int before = web.getScrollY();
+          if (amount < 0) { if (before > 0) web.scrollBy(0, Math.max(amount, -before)); }
           else { web.scrollBy(0, amount); }
           if (web.getScrollY() < 0) web.scrollTo(0, 0);
+          long nowMs = SystemClock.uptimeMillis();
+          if (web.getScrollY() == before && nowMs - lastEdgeJs > 120L) {
+            lastEdgeJs = nowMs;
+            web.evaluateJavascript(
+                "(function(){try{var se=document.scrollingElement||document.documentElement||document.body;if(!se)return;"
+                    + "var max=Math.max(0,(se.scrollHeight||0)-(window.innerHeight||0));"
+                    + "var cur=(se.scrollTop||window.pageYOffset||0);"
+                    + "var t=Math.max(0,Math.min(max,cur+(" + (amount * 8) + ")));"
+                    + "if(t!==cur){se.scrollTop=t;window.scrollTo(0,t);}"
+                    + "}catch(e){}})();",
+                null);
+          }
         }
       }
       cx = Math.max(0f, Math.min(w - 1f, cx));
       cy = Math.max(0f, Math.min(h - 1f, cy));
       placeCursor();
-      long t = SystemClock.uptimeMillis();
-      MotionEvent hover = MotionEvent.obtain(t, t, MotionEvent.ACTION_HOVER_MOVE, cx, cy, 0);
-      hover.setSource(4098);
-      web.dispatchGenericMotionEvent(hover);
-      hover.recycle();
+      if (Math.abs(cx - lastHx) >= 1f || Math.abs(cy - lastHy) >= 1f) {
+        lastHx = cx; lastHy = cy;
+        long t = SystemClock.uptimeMillis();
+        MotionEvent hover = MotionEvent.obtain(t, t, MotionEvent.ACTION_HOVER_MOVE, cx, cy, 0);
+        hover.setSource(4098);
+        web.dispatchGenericMotionEvent(hover);
+        hover.recycle();
+      }
       if (ax != 0 || ay != 0 || Math.abs(vx) > 5f || Math.abs(vy) > 5f) {
         Choreographer.getInstance().postFrameCallback(this);
       } else {

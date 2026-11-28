@@ -4,6 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Birch OS</title>
+    <style id="birch-perf">
+      /* TV perf: no blur/backdrop, no ambient loops, cheap transform+opacity motion only */
+      #root .glass,#root .glass-strong,#root [class*=backdrop]{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+      #root [class*=blur-]{filter:none!important}
+      #root .animate-kenburns,#root .animate-ambient{animation:none!important}
+      #root *{scroll-behavior:auto!important}
+      #root [class*=shadow-]{box-shadow:0 2px 8px rgba(0,0,0,.35)!important}
+      #root img{content-visibility:auto;decoding:async}
+      #root [class*=transition]{transition-property:transform,opacity!important;transition-duration:.18s!important;transition-timing-function:cubic-bezier(.2,.8,.2,1)!important}
+      #root [class*=hover\:scale],#root [class*=focus\:scale],#root [class*=scale-]{will-change:transform}
+      @media (prefers-reduced-motion:reduce){#root *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+    </style>
     <script src="./studio.js"></script>
     <script src="./birch-updates.js"></script>
     <script src="./profiles.js"></script>
