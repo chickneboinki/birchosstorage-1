@@ -78,7 +78,7 @@ public class WebAppActivity extends Activity {
           + "var r=el.getBoundingClientRect();if(r.width<200||r.height<150)return;"
           + "var tx=(el.innerText||'').slice(0,800);if(isChalText(tx)||el.querySelector('canvas')){clickClose(el);nuke(el);}}catch(e){}});"
           + "}catch(e){}}"
-          + "kill();setInterval(kill,3000);"
+          + "kill();setInterval(kill,8000);"
           + "try{var kt=0;new MutationObserver(function(){if(kt)return;kt=setTimeout(function(){kt=0;kill();},1500);}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}"
           + "}catch(e){}})();";
 
@@ -384,12 +384,15 @@ public class WebAppActivity extends Activity {
     try { CookieManager cm = CookieManager.getInstance(); cm.setAcceptCookie(true); cm.flush(); } catch (Throwable ignored) {}
   }
 
+  static final String ALL_JS = SPOOF + ";\n" + PROFILE_BYPASS + ";\n" + NO_POPUPS + ";\n" + CHALLENGE + ";\n" + VIDEO_FIX;
+
+  /** One bridge call instead of five; skipped for bundled local pages (e.g. qaisifyy) that don't need site workarounds. */
   void injectAll(WebView v) {
-    v.evaluateJavascript(SPOOF, null);
-    v.evaluateJavascript(PROFILE_BYPASS, null);
-    v.evaluateJavascript(NO_POPUPS, null);
-    v.evaluateJavascript(CHALLENGE, null);
-    v.evaluateJavascript(VIDEO_FIX, null);
+    try {
+      Uri u = Uri.parse(v.getUrl() == null ? "" : v.getUrl());
+      if (MainActivity.HOST.equals(u.getHost()) || "about".equals(u.getScheme())) return;
+    } catch (Throwable ignored) {}
+    v.evaluateJavascript(ALL_JS, null);
   }
 
   WebResourceResponse injectHtml(String url) {
