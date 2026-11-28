@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
 
   @Override protected void onCreate(Bundle b) {
     super.onCreate(b);
+    new Thread(() -> { try { computeApps(); } catch (Throwable ignored) {} }, "apps-warm").start();
     coldStart = !processStarted;
     processStarted = true;
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED);
@@ -113,18 +114,95 @@ public class MainActivity extends Activity {
     String c = iconCache.get(pkg);
     if (c != null) return c;
     try {
-      int w = Math.max(1, Math.min(320, d.getIntrinsicWidth() > 0 ? d.getIntrinsicWidth() : 192));
-      int h = Math.max(1, Math.min(180, d.getIntrinsicHeight() > 0 ? d.getIntrinsicHeight() : 192));
+      int w = Math.max(1, Math.min(256, d.getIntrinsicWidth() > 0 ? d.getIntrinsicWidth() : 160));
+      int h = Math.max(1, Math.min(144, d.getIntrinsicHeight() > 0 ? d.getIntrinsicHeight() : 160));
       Bitmap bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
       Canvas cv = new Canvas(bm);
       d.setBounds(0, 0, w, h);
       d.draw(cv);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
-      bm.compress(Bitmap.CompressFormat.PNG, 100, out);
-      c = "data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
+      bm.compress(Bitmap.CompressFormat.WEBP, 82, out);
+      bm.recycle();
+      c = "data:image/webp;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP);
     } catch (Throwable t) { c = ""; }
     iconCache.put(pkg, c);
     return c;
+  }
+
+  // ---- installed-apps list: cached in memory + on disk, prewarmed off the UI/JS thread ----
+  final Object appsLock = new Object();
+  String appsJson, appsSig;
+
+  String appsSignature() {
+    try {
+      PackageManager pm = getPackageManager();
+      java.util.TreeSet<String> t = new java.util.TreeSet<>();
+      String[] cats = { Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER };
+      for (String cat : cats)
+        for (ResolveInfo r : pm.queryIntentActivities(new Intent(Intent.ACTION_MAIN).addCategory(cat), 0)) {
+          ApplicationInfo ai = r.activityInfo.applicationInfo;
+          t.add(r.activityInfo.packageName + ":" + new java.io.File(ai.sourceDir).lastModified());
+        }
+      return "v2|" + Build.VERSION.SDK_INT + "|" + t.hashCode() + "|" + t.size();
+    } catch (Throwable e) { return "x" + System.nanoTime(); }
+  }
+
+  String computeApps() {
+    synchronized (appsLock) {
+      String sig = appsSignature();
+      if (appsJson != null && sig.equals(appsSig)) return appsJson;
+      java.io.File f = new java.io.File(getCacheDir(), "apps.v2.json");
+      try {
+        if (f.exists()) {
+          java.io.FileInputStream in = new java.io.FileInputStream(f);
+          ByteArrayOutputStream bo = new ByteArrayOutputStream();
+          byte[] buf = new byte[65536]; int n;
+          while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+          in.close();
+          String all = bo.toString("UTF-8");
+          int nl = all.indexOf('\n');
+          if (nl > 0 && all.substring(0, nl).equals(sig)) { appsJson = all.substring(nl + 1); appsSig = sig; return appsJson; }
+        }
+      } catch (Throwable ignored) {}
+      String j = buildApps();
+      appsJson = j; appsSig = sig;
+      try {
+        java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+        out.write((sig + "\n" + j).getBytes("UTF-8"));
+        out.close();
+      } catch (Throwable ignored) {}
+      return j;
+    }
+  }
+
+  String buildApps() {
+      PackageManager pm = getPackageManager();
+      JSONArray arr = new JSONArray();
+      Set<String> seen = new HashSet<>();
+      String[] cats = { Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER };
+      for (String cat : cats) {
+        Intent q = new Intent(Intent.ACTION_MAIN).addCategory(cat);
+        List<ResolveInfo> list = pm.queryIntentActivities(q, 0);
+        for (ResolveInfo r : list) {
+          String pkg = r.activityInfo.packageName;
+          if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
+          try {
+            ApplicationInfo ai = r.activityInfo.applicationInfo;
+            Drawable banner = cat.equals(Intent.CATEGORY_LEANBACK_LAUNCHER) ? pm.getApplicationBanner(ai) : null;
+            Drawable icon = banner != null ? banner : r.loadIcon(pm);
+            JSONObject o = new JSONObject();
+            o.put("id", pkg);
+            o.put("name", r.loadLabel(pm).toString());
+            o.put("icon", iconFor(pkg, icon));
+            o.put("banner", banner != null);
+            o.put("system", (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
+            int c = Build.VERSION.SDK_INT >= 26 ? ai.category : -1;
+            o.put("category", c == ApplicationInfo.CATEGORY_GAME ? "Games" : c == ApplicationInfo.CATEGORY_AUDIO ? "Music" : c == ApplicationInfo.CATEGORY_VIDEO ? "Streaming" : "Other");
+            arr.put(o);
+          } catch (Throwable ignored) {}
+        }
+      }
+      return arr.toString();
   }
 
   class Bridge {
@@ -191,35 +269,7 @@ public class MainActivity extends Activity {
         }
       }).start();
     }
-    @JavascriptInterface public String getInstalledApps() {
-      PackageManager pm = getPackageManager();
-      JSONArray arr = new JSONArray();
-      Set<String> seen = new HashSet<>();
-      String[] cats = { Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER };
-      for (String cat : cats) {
-        Intent q = new Intent(Intent.ACTION_MAIN).addCategory(cat);
-        List<ResolveInfo> list = pm.queryIntentActivities(q, 0);
-        for (ResolveInfo r : list) {
-          String pkg = r.activityInfo.packageName;
-          if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
-          try {
-            ApplicationInfo ai = r.activityInfo.applicationInfo;
-            Drawable banner = cat.equals(Intent.CATEGORY_LEANBACK_LAUNCHER) ? pm.getApplicationBanner(ai) : null;
-            Drawable icon = banner != null ? banner : r.loadIcon(pm);
-            JSONObject o = new JSONObject();
-            o.put("id", pkg);
-            o.put("name", r.loadLabel(pm).toString());
-            o.put("icon", iconFor(pkg, icon));
-            o.put("banner", banner != null);
-            o.put("system", (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0);
-            int c = Build.VERSION.SDK_INT >= 26 ? ai.category : -1;
-            o.put("category", c == ApplicationInfo.CATEGORY_GAME ? "Games" : c == ApplicationInfo.CATEGORY_AUDIO ? "Music" : c == ApplicationInfo.CATEGORY_VIDEO ? "Streaming" : "Other");
-            arr.put(o);
-          } catch (Throwable ignored) {}
-        }
-      }
-      return arr.toString();
-    }
+    @JavascriptInterface public String getInstalledApps() { return computeApps(); }
     @JavascriptInterface public boolean launchApp(String pkg) {
       PackageManager pm = getPackageManager();
       Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);
