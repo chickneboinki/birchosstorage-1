@@ -112,6 +112,7 @@
     ['wpBlur', 'x_wall', 'Look', 'Wallpaper blur', 'r', 0, 20, 2, 0, 'px'],
     ['wpOff', 'x_wall', 'Solid color', 'Turn wallpaper off (use a solid color)', 't', false],
     ['wpColor', 'x_wall', 'Solid color', 'Background color', 'c', Object.keys(WPC), 'black'],
+    ['webCtl', 'x_system', 'Web apps', 'Web app controls: ask each time, always cursor, or always arrows', 'c', ['ask each time', 'always cursor', 'always arrows'], 'ask each time'],
     ['perfMode', 'x_system', 'Performance', 'Performance mode', 'c', ['max beauty', 'balanced', 'fast', 'auto'], 'balanced'],
     ['saverMin', 'x_system', 'Screensaver', 'Start screensaver after (0 = off)', 'r', 0, 30, 1, 5, ' min'],
     ['autoBk', 'x_system', 'Backup & restore', 'Auto-backup once a day', 't', true],
@@ -363,6 +364,7 @@
   function pushWeb() {
     try {
       var b = window.BirchAndroid; if (!b || !b.setPicture) return;
+      try { if (b.setWebControl) b.setWebControl(String(S.webCtl || 'ask each time')); } catch (e2) {}
       var o = (S.webMode === 'off' || compare) ? { off: 1 } : webPic(S, S.webMode);
       var js = WEBJS + JSON.stringify(o) + ");";
       if (js === lastWeb) return; lastWeb = js; b.setPicture(js);

@@ -248,6 +248,7 @@ public class MainActivity extends Activity {
       catch (Throwable t) { return VERSION; }
     }
     @JavascriptInterface public void setPicture(String js) { Pic.js = js; }
+    @JavascriptInterface public void setWebControl(String mode) { try { getSharedPreferences("birch", MODE_PRIVATE).edit().putString("webctl", mode == null ? "ask each time" : mode).apply(); } catch (Throwable ignored) {} }
     @JavascriptInterface public void setKeepScreenOn(boolean on) {
       runOnUiThread(() -> {
         if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

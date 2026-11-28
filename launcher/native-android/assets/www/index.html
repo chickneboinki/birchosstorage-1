@@ -13,6 +13,7 @@
       #root [class*=shadow-]{box-shadow:0 2px 8px rgba(0,0,0,.35)!important}
       #root img{content-visibility:auto;decoding:async}
       #root [class*=transition]{transition-property:transform,opacity!important;transition-duration:.18s!important;transition-timing-function:cubic-bezier(.2,.8,.2,1)!important}
+      html.birch-hold #root *{transition:none!important;animation:none!important}
       @media (prefers-reduced-motion:reduce){#root *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
     </style>
     <script defer src="./studio.js"></script>

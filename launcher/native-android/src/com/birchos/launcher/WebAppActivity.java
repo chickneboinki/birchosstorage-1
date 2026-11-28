@@ -620,7 +620,18 @@ public class WebAppActivity extends Activity {
     String url = getIntent().getStringExtra("url");
     if (url != null) { try { homeBase = base(Uri.parse(url).getHost()); } catch (Throwable t) { homeBase = ""; } }
     web.loadUrl(url == null ? "about:blank" : url);
-    showChooser();
+    String ctl = "ask each time";
+    try { ctl = getSharedPreferences("birch", MODE_PRIVATE).getString("webctl", "ask each time"); } catch (Throwable ignored) {}
+    if (ctl.startsWith("always cursor")) {
+      root.post(() -> {
+        cursorMode = true; cx = Math.max(100, root.getWidth() / 2f); cy = Math.max(100, root.getHeight() / 2f);
+        cursor.setVisibility(View.VISIBLE); placeCursor(); web.requestFocus();
+      });
+    } else if (ctl.startsWith("always arrows")) {
+      cursorMode = false; web.requestFocus();
+    } else {
+      showChooser();
+    }
   }
 
   @Override protected void onPause() {
