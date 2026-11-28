@@ -93,6 +93,23 @@ public class MainActivity extends Activity {
     super.onPause();
   }
 
+  long lastStopAt;
+  @Override protected void onStop() {
+    lastStopAt = android.os.SystemClock.elapsedRealtime();
+    // launcher is hidden while another app is open: let the page throttle its timers instead of running them for hours
+    try { web.onPause(); } catch (Throwable ignored) {}
+    super.onStop();
+  }
+  @Override protected void onStart() {
+    super.onStart();
+    try { web.onResume(); } catch (Throwable ignored) {}
+    // after a very long time in the background, reload the home page to drop any accumulated JS heap
+    if (lastStopAt > 0 && android.os.SystemClock.elapsedRealtime() - lastStopAt > 45L * 60L * 1000L) {
+      try { web.reload(); } catch (Throwable ignored) {}
+    }
+    lastStopAt = 0;
+  }
+
   @Override public void onBackPressed() {
     web.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))", null);
   }

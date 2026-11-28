@@ -605,8 +605,30 @@ public class WebAppActivity extends Activity {
     showChooser();
   }
 
-  @Override protected void onPause() { persistCookies(); stopLoop(); super.onPause(); }
-  @Override protected void onResume() { super.onResume(); persistCookies(); }
+  @Override protected void onPause() {
+    persistCookies(); stopLoop();
+    try { web.onPause(); } catch (Throwable ignored) {}
+    super.onPause();
+  }
+  @Override protected void onResume() {
+    super.onResume();
+    try { web.onResume(); } catch (Throwable ignored) {}
+    persistCookies();
+  }
+  @Override protected void onDestroy() {
+    // Fully release the WebView (otherwise every opened app leaves a renderer + JS heap behind -> slowdown over time)
+    try { persistCookies(); } catch (Throwable ignored) {}
+    try {
+      stopLoop();
+      web.stopLoading();
+      web.setWebChromeClient(null);
+      web.setWebViewClient(null);
+      if (web.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) web.getParent()).removeView(web);
+      web.removeAllViews();
+      web.destroy();
+    } catch (Throwable ignored) {}
+    super.onDestroy();
+  }
   @Override public void onWindowFocusChanged(boolean has) { super.onWindowFocusChanged(has); if (has) hideBars(getWindow().getDecorView()); }
 
   void showChooser() {
